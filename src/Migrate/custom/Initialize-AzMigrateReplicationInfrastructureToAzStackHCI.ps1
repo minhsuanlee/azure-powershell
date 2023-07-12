@@ -119,11 +119,23 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
     )
 
     process {
-        . "$PSScriptRoot\AzStackHCICommonSettings.ps1"
+        Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
         Import-Module Az.Resources
         Import-Module Az.Storage
 
-        Write-Host "Running AzStackHCI scenario to initialize AzMigrate Replication Infrastructure."    
+        # Get Scenario global variable
+        $scenarioObject = Get-Variable `
+            -Name $AzStackHCIGlobalVariableNames.Scenario `
+            -ErrorVariable notPresent `
+            -ErrorAction SilentlyContinue
+        if ($null -eq $scenarioObject) {
+            $scenario = $AzStackHCIInstanceTypes.AzStackHCI
+            Set-Variable -Name $AzStackHCIGlobalVariableNames.Scenario -Value $scenario -Option constant -Scope global
+        }
+        else {
+            $scenario = $scenarioObject.Value
+        }
+        Write-Host "Running $scenario scenario to initialize AzMigrate Replication Infrastructure." 
 
         $context = Get-AzContext
         # Get SubscriptionId
@@ -212,15 +224,25 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
             throw "Server Discovery Solution missing Appliance Details. Invalid Solution."           
         }
 
-        # TODO: update to support VMwareToAzStackHCI senario
-        # Set AzStackHCI instance type
-        $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
-        if (-not ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex)) {
-            $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
-            throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+        # Get AzStackHCI Instance Type global variable
+        $azstackHCIInstanceTypeObject = Get-Variable `
+            -Name $AzStackHCIGlobalVariableNames.InstanceType `
+            -ErrorVariable notPresent `
+            -ErrorAction SilentlyContinue
+        if ($null -eq $azstackHCIInstanceTypeObject) {
+            # TODO: update to support VMwareToAzStackHCI senario
+            $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
+            if (-not ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex)) {
+                $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
+                throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+            }
+            else {
+                $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
+            }
+            Set-Variable -Name $AzStackHCIGlobalVariableNames.InstanceType -Value $instanceType -Option constant -Scope global
         }
         else {
-            $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
+            $instanceType = $azstackHCIInstanceTypeObject.Value
         }
         Write-Host "Running $instanceType scenario."
 
@@ -290,16 +312,23 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
         }
 
         # Put Policy
-        $policyName = $replicationVaultName + $instanceType + "policy"
+        $policyName = $replicationVault.Name + $instanceType + "policy"
         $policy = Get-AzMigratePolicy `
             -ResourceGroupName $resourceGroup.ResourceGroupName `
             -Name $policyName `
-            -VaultName $replicationVaultName `
+            -VaultName $replicationVault.Name `
             -SubscriptionId $SubscriptionId `
             -ErrorVariable notPresent `
             -ErrorAction SilentlyContinue
         if ($null -eq $policy) {
             Write-Host "Creating Policy..."
+
+            $params = @{
+                InstanceType                     = $instanceType;
+                RecoveryPointHistoryInMinute     = $ReplicationDetails.PolicyDetails.DefaultRecoveryPointHistoryInMinutes;
+                CrashConsistentFrequencyInMinute = $ReplicationDetails.PolicyDetails.DefaultCrashConsistentFrequencyInMinutes;
+                AppConsistentFrequencyInMinute   = $ReplicationDetails.PolicyDetails.DefaultAppConsistentFrequencyInMinutes;
+            }
 
             # Setup Policy deployment parameters
             $policyProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.PolicyModelProperties]::new()
@@ -310,23 +339,49 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
             else {
                 $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcipolicyModelCustomProperties]::new()
             }
-            $policyCustomProperties.InstanceType = $instanceType
-            $policyCustomProperties.RecoveryPointHistoryInMinute = $ReplicationDetails.PolicyDetails.DefaultRecoveryPointHistoryInMinutes
-            $policyCustomProperties.CrashConsistentFrequencyInMinute = $ReplicationDetails.PolicyDetails.DefaultCrashConsistentFrequencyInMinutes
-            $policyCustomProperties.AppConsistentFrequencyInMinute = $ReplicationDetails.PolicyDetails.DefaultAppConsistentFrequencyInMinutes
-            $policyProperties.CustomPropertyInstanceType = $policyCustomProperties
-            $policyCustomPropertyInstanceType = $policyCustomProperties | ConvertTo-Json
+            $policyCustomProperties.InstanceType = $params.InstanceType
+            $policyCustomProperties.RecoveryPointHistoryInMinute = $params.RecoveryPointHistoryInMinute
+            $policyCustomProperties.CrashConsistentFrequencyInMinute = $params.CrashConsistentFrequencyInMinute
+            $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
 
-            $policy = New-AzMigratePolicy `
+            $policyProperties.CustomProperty = $policyCustomProperties
+            
+            $policyOperation = New-AzMigratePolicy `
                 -Name $policyName `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -VaultName $replicationVaultName `
-                -CustomPropertyInstanceType $policyCustomPropertyInstanceType `
+                -Property $policyProperties `
                 -SubscriptionId $SubscriptionId
+            $operationId = $policyOperation.Name
+
+            # Check Policy creation status every 5s
+            do {
+                $operationStatus = Get-AzMigratePolicyOperationStatus `
+                    -PolicyName $policyName `
+                    -ResourceGroupName $resourceGroup.ResourceGroupName `
+                    -VaultName $replicationVault.Name `
+                    -SubscriptionId $SubscriptionId `
+                    -OperationId $operationId `
+                    -ErrorVariable notPresent `
+                    -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 5
+            } while ($null -ne $operationStatus -and $operationStatus.Status -ne "Succeeded")
+
             Write-Host "New Policy created."
         }
         else {
             Write-Host "Existing Policy found."
+        }
+        
+        $policy = Get-AzMigratePolicy `
+            -ResourceGroupName $resourceGroup.ResourceGroupName `
+            -Name $policyName `
+            -VaultName $replicationVault.Name `
+            -SubscriptionId $SubscriptionId `
+            -ErrorVariable notPresent `
+            -ErrorAction SilentlyContinue
+        if ($null -eq $policy) {
+            throw "Policy '$($policyName)' may have been accidently deleted. Please re-run this command to re-create it."
         }
         Write-Host "*Selected Policy: '$($policy.Name)'."
 
@@ -358,8 +413,6 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
                 Write-Host "Creating Cache Storage Account with default name '$($cacheStorageAccountName)'..."
 
                 $params = @{
-                    type                                = "Microsoft.Storage/storageAccounts";
-                    apiVersion                          = $ApiVersions.StorageAccount;
                     name                                = $cacheStorageAccountName;
                     location                            = $migrateProject.Location;
                     migrateProjectName                  = $migrateProject.Name;
@@ -413,7 +466,7 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
             }
         }
 
-        # Get Cache Storage Account by Id
+        # Get Cache Storage Account
         $cacheStorageAccount = Get-AzStorageAccount `
             -ResourceGroupName $resourceGroup.ResourceGroupName `
             -Name $cacheStorageAccountName `
@@ -421,7 +474,7 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
             -ErrorAction SilentlyContinue
         if ($null -eq $cacheStorageAccount) {
             # This should never throw.
-            throw "Cache Storage Account '$($cacheStorageAccountName)' does not exist."
+            throw "Cache Storage Account '$($cacheStorageAccountName)' may have been accidently deleted. Please re-run this command to re-create it."
         }
         Write-Host "Existing Cache Stroage Account found."
 
@@ -478,11 +531,73 @@ function Initialize-AzMigrateReplicationInfrastructureToAzStackHCI {
             -ErrorVariable notPresent `
             -ErrorAction SilentlyContinue
         if ($null -eq $replicationExtension) {
-            # TODO: Create replication extension
+            Write-Host "Waiting 2 minutes for Cache Storage Account permissions to sync before creating Replication Extension..."
+            Start-Sleep -Seconds 120
+            Write-Host "Creating Replication Extension..."
+
+            $params = @{
+                InstanceType                = $instanceType;
+                HyperVFabricArmId           = $sourceFabric.Id;
+                AzStackHCIFabricArmId       = $targetFabric.Id;
+                StorageAccountId            = $cacheStorageAccount.Id;
+                StorageAccountSasSecretName = $null;
+            }
+
+            # Setup Replication Extension deployment parameters
+            $replicationExtensionProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.ReplicationExtensionModelProperties]::new()
+            
+            if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
+                $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHcireplicationExtensionModelCustomProperties]::new()
+            }
+            else {
+                $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcireplicationExtensionModelCustomProperties]::new()
+            }
+            $replicationExtensionCustomProperties.InstanceType = $params.InstanceType
+            $replicationExtensionCustomProperties.HyperVFabricArmId = $params.HyperVFabricArmId
+            $replicationExtensionCustomProperties.AzStackHCIFabricArmId = $params.AzStackHCIFabricArmId
+            $replicationExtensionCustomProperties.StorageAccountId = $params.StorageAccountId
+            $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
+
+            $replicationExtensionProperties.CustomProperty = $replicationExtensionCustomProperties
+            
+            $replicationExtensionOperation = New-AzMigrateReplicationExtension `
+                -Name $replicationExtensionName `
+                -ResourceGroupName $resourceGroup.ResourceGroupName `
+                -VaultName $replicationVaultName `
+                -Property $replicationExtensionProperties `
+                -SubscriptionId $SubscriptionId
+            $operationId = $replicationExtensionOperation.Name
+
+            # Check Replication Extension creation status every 5s
+            do {
+                $operationStatus = Get-AzMigrateReplicationExtensionOperationStatus `
+                    -ReplicationExtensionName $replicationExtensionName `
+                    -ResourceGroupName $resourceGroup.ResourceGroupName `
+                    -VaultName $replicationVault.Name `
+                    -SubscriptionId $SubscriptionId `
+                    -OperationId $operationId `
+                    -ErrorVariable notPresent `
+                    -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 5
+            } while ($null -ne $operationStatus -and $operationStatus.Status -ne "Succeeded")
+
             Write-Host "New Replication Extension created."
         }
         else {
             Write-Host "Existing Replication Extension found."
+        }
+
+        # Get Replication Extension
+        $replicationExtension = Get-AzMigrateReplicationExtension `
+            -ResourceGroupName $resourceGroup.ResourceGroupName `
+            -Name $replicationExtensionName `
+            -VaultName $replicationVaultName `
+            -SubscriptionId $SubscriptionId `
+            -ErrorVariable notPresent `
+            -ErrorAction SilentlyContinue
+        if ($null -eq $replicationExtension) {
+            # This should never throw.
+            throw "Replication Extension '$($replicationExtensionName)' may have been accidently deleted. Please re-run this command to re-create it."
         }
         Write-Host "*Selected Replication Extension: '$($replicationExtension.Name)'."
 
