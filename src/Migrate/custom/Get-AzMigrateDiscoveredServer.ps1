@@ -23,8 +23,7 @@ https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratediscovered
 #>
 
 function Get-AzMigrateDiscoveredServer {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202001.IVMwareMachine])]
-    [CmdletBinding(DefaultParameterSetName='List', PositionalBinding=$false, SupportsShouldProcess, ConfirmImpact='Medium')]
+    [CmdletBinding(DefaultParameterSetName = 'List', PositionalBinding = $false, SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param (
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -38,22 +37,22 @@ function Get-AzMigrateDiscoveredServer {
         # Specifies the resource group name.
         ${ResourceGroupName},
 
-        [Parameter(ParameterSetName='Get', Mandatory)]
-        [Parameter(ParameterSetName='GetInSite', Mandatory)]
+        [Parameter(ParameterSetName = 'Get', Mandatory)]
+        [Parameter(ParameterSetName = 'GetInSite', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the VMware machine name. This is an internal Name. For users, use display name.
+        # Specifies the source machine name. This is an internal Name. For users, use display name.
         ${Name},
 
-        [Parameter(ParameterSetName='List')]
-        [Parameter(ParameterSetName='ListInSite')]
+        [Parameter(ParameterSetName = 'List')]
+        [Parameter(ParameterSetName = 'ListInSite')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the VMware machine display name.
+        # Specifies the source machine display name.
         ${DisplayName},
 
-        [Parameter(ParameterSetName='GetInSite', Mandatory)]
-        [Parameter(ParameterSetName='ListInSite', Mandatory)]
+        [Parameter(ParameterSetName = 'GetInSite', Mandatory)]
+        [Parameter(ParameterSetName = 'ListInSite', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the appliance name. This internally maps to a site.
@@ -61,10 +60,20 @@ function Get-AzMigrateDiscoveredServer {
 
         [Parameter()]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Runtime.DefaultInfo(Script='(Get-AzContext).Subscription.Id')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Runtime.DefaultInfo(Script = '(Get-AzContext).Subscription.Id')]
         [System.String[]]
         # Specifies the subscription id.
-        ${SubscriptionId}
+        ${SubscriptionId},
+
+        [Parameter(ParameterSetName = 'GetInSite')]
+        [Parameter(ParameterSetName = 'ListInSite')]
+        [ValidateSet("VMware", "HyperV")]
+        [ArgumentCompleter( { "VMware", "HyperV" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the source machine type. Possible values are "VMware" and "HyperV".
+        # Defaults to "VMware".
+        ${SourceMachineType} = "VMware"
     )
     
     process {
@@ -95,12 +104,21 @@ function Get-AzMigrateDiscoveredServer {
         }
 
         if ($null -eq $discoverySolution.DetailExtendedDetail["applianceNameToSiteIdMapV2"] -And
-             $null -eq $discoverySolution.DetailExtendedDetail["applianceNameToSiteIdMapV3"] ) {
+            $null -eq $discoverySolution.DetailExtendedDetail["applianceNameToSiteIdMapV3"] ) {
             throw "Server Discovery Solution missing Appliance Details. Invalid Solution."           
         }
 
+        # Get source machine site type and check if the source machine type is supported.
+        if ($SourceMachineType -eq "VMware") {
+            $siteType = "VMwareSites"
+        }
+        else {
+            # HyperV
+            $siteType = "HyperVSites"
+        }
+
         # Regex to match site name.
-        $r = '(?<=/Microsoft.OffAzure/VMwareSites/).*$'
+        $r = "(?<=/Microsoft.OffAzure/$siteType/).*$"
         $siteNameTmp = ""
         if ($parameterSet -match "Site") {
             #Fetch by site scenario. This is when site name filter is provided.
@@ -112,13 +130,25 @@ function Get-AzMigrateDiscoveredServer {
                         $siteNameTmp = $Matches[0]
                         $siteFound = 1
                         if ($parameterSet -eq 'GetInSite') {
-                            return Get-AzMigrateMachine -Name $Name -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
+                            if ($SourceMachineType -eq "VMware") {
+                                return Get-AzMigrateMachine -Name $Name -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
+                            }
+                            else {
+                                # HyperV
+                                return Get-AzMigrateHyperVMachine -Name $Name -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
+                            }
                         }
                         elseif ($parameterSet -eq 'ListInSite') {
-                            $siteMachines = Get-AzMigrateMachine -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
-                            
+                            if ($SourceMachineType -eq "VMware") {
+                                $siteMachines = Get-AzMigrateMachine -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
+                            }
+                            else {
+                                # HyperV
+                                $siteMachines = Get-AzMigrateHyperVMachine -ResourceGroupName $ResourceGroupName -SiteName $siteNameTmp -SubscriptionId $SubscriptionId
+                            }
+
                             if ($DisplayName) {
-                                $filteredMachines = $siteMachines | Where-Object {$_.DisplayName -match $DisplayName}
+                                $filteredMachines = $siteMachines | Where-Object { $_.DisplayName -match $DisplayName }
                                 return $filteredMachines
                             }
                             else {
@@ -151,7 +181,7 @@ function Get-AzMigrateDiscoveredServer {
                 }
 
                 if ($DisplayName) {
-                    $filteredMachines = $projectSdsMachines | Where-Object {$_.DisplayName -match $DisplayName}
+                    $filteredMachines = $projectSdsMachines | Where-Object { $_.DisplayName -match $DisplayName }
                     return $filteredMachines
                 }
                 else {

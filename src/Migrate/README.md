@@ -51,9 +51,10 @@ skip-semantics-validation: true
 require:
   - $(this-folder)/../readme.azure.noprofile.md
 input-file:
-    - $(repo)/specification/migrate/resource-manager/Microsoft.OffAzure/stable/2020-01-01/migrate.json
-    - $(repo)/specification/migrateprojects/resource-manager/Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
-    - $(repo)/specification/recoveryservicessiterecovery/resource-manager/Microsoft.RecoveryServices/stable/2023-01-01/service.json
+  - $(repo)/specification/migrate/resource-manager/Microsoft.OffAzure/stable/2020-01-01/migrate.json
+  - $(repo)/specification/migrateprojects/resource-manager/Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
+  - $(repo)/specification/recoveryservicessiterecovery/resource-manager/Microsoft.RecoveryServices/stable/2023-01-01/service.json
+  - $(this-folder)/../swagger.json
 
 module-version: 1.0.1
 title: Migrate 
@@ -101,6 +102,10 @@ directive:
     - ProtectionContainerMappingProviderSpecificDetails
     - MigrateProjectProperties
     - FabricProperties
+    - PolicyModelProperties
+    - ReplicationExtensionModelProperties
+    - ProtectedItemModelProperties
+    - PlannedFailoverModelProperties
   # Remove variants not in scope
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
@@ -222,10 +227,6 @@ directive:
     remove: true
   - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
     where:
-      subject: ^HyperV
-    remove: true
-  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
-    where:
       subject: ^Job|^VMwareOperationsStatus
     remove: true
   - from: Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
@@ -257,7 +258,7 @@ directive:
     remove: true
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
-      subject: ^Commit|^Planned|^Renew|^Reprotect|^Unplanned|VaultHealth$|ComputeSize$|FabricConsistency$
+      subject: ^Commit|^Renew|^Reprotect|^Unplanned|VaultHealth$|ComputeSize$|FabricConsistency$
     remove: true
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
@@ -340,6 +341,10 @@ directive:
       verb: Resume$
       subject: ^ReplicationMigrationItemReplication
     hide: true
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      subject: ^Planned
+    hide: true
   # Hide cmdlets not to be visible to user.
   - from: Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
     where:
@@ -350,6 +355,10 @@ directive:
     where:
       verb: Set$
       subject: (HyperV)?Site$
+    hide: true
+  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
+    where:
+      subject: ^HyperV
     hide: true
   - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
     where:
