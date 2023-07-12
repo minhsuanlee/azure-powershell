@@ -104,6 +104,8 @@ directive:
     - FabricProperties
     - PolicyModelProperties
     - ReplicationExtensionModelProperties
+    - ProtectedItemModelProperties
+    - PlannedFailoverModelProperties
   # Remove variants not in scope
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
@@ -256,7 +258,7 @@ directive:
     remove: true
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
-      subject: ^Commit|^Planned|^Renew|^Reprotect|^Unplanned|VaultHealth$|ComputeSize$|FabricConsistency$
+      subject: ^Commit|^Renew|^Reprotect|^Unplanned|VaultHealth$|ComputeSize$|FabricConsistency$
     remove: true
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
@@ -293,7 +295,25 @@ directive:
       verb: New
       subject: ^ReplicationVaultSetting|^SupportedOperatingSystem|^ReplicationProtectionIntent
     remove: true
+  # Rename cmdlets used by custom
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      verb: Get$
+      subject: ^ReplicationFabric
+    set:
+      subject: ReplicationFabricToAzureMigrate
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      verb: Get$
+      subject: ^ReplicationPolicy
+    set:
+      subject: ReplicationPolicyToAzureMigrate
   # Hide cmldets used by custom
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      verb: Get$
+      subject: ToAzureMigrate$
+    hide: true
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
       verb: Get$
@@ -338,6 +358,10 @@ directive:
     where:
       verb: Resume$
       subject: ^ReplicationMigrationItemReplication
+    hide: true
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      subject: ^Planned
     hide: true
   # Hide cmdlets not to be visible to user.
   - from: Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
