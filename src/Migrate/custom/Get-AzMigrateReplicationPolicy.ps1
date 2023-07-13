@@ -139,15 +139,16 @@ function Get-AzMigrateReplicationPolicy {
             }
         }
 
+        # Remove common optional parameter -Scenario
+        $null = $PSBoundParameters.Remove('Scenario')
+
         if ($scenario -eq "agentlessVMware") {
             $null = $PSBoundParameters.Remove('VaultName')
-            $null = $PSBoundParameters.Remove('Scenario')
 
             return Az.Migrate.Internal\Get-AzMigrateReplicationPolicyToAzureMigrate @PSBoundParameters
         }
         else {
             $null = $PSBoundParameters.Remove('ResourceName')
-            $null = $PSBoundParameters.Remove('Scenario')
             $null = $PSBoundParameters.Add('VaultName', $ResourceName)
             
             return Get-AzMigratePolicy @PSBoundParameters

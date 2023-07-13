@@ -152,16 +152,17 @@ function Get-AzMigrateReplicationFabric {
             }
         }
 
+        # Remove common optional parameter -Scenario
+        $null = $PSBoundParameters.Remove('Scenario')
+
         if ($scenario -eq "agentlessVMware") {
             $null = $PSBoundParameters.Remove('ContinuationToken')
-            $null = $PSBoundParameters.Remove('Scenario')
 
             return Az.Migrate.Internal\Get-AzMigrateReplicationFabricToAzureMigrate @PSBoundParameters
         }
         else {
             $null = $PSBoundParameters.Remove('ResourceName')
             $null = $PSBoundParameters.Remove('Filter')
-            $null = $PSBoundParameters.Remove('Scenario')
             
             return Get-AzMigrateFabric @PSBoundParameters
         }
