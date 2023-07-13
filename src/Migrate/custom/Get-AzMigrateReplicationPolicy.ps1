@@ -8,23 +8,23 @@
 
 <#
 .Synopsis
-Gets the details of an Azure Site Recovery fabric.
+Gets the details of a replication policy.
 .Description
-Gets the details of an Azure Site Recovery fabric.
+Gets the details of a replication policy.
 .Example
 {{ Add code here }}
 .Example
 {{ Add code here }}
 
 .Outputs
-Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IFabric
-Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IFabricModel
+Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IPolicy
+Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPolicyModel
 .Link
-https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratereplicationfabric
+https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratereplicationpolicytoazuremigrate
 #>
-function Get-AzMigrateReplicationFabric {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IFabricModel], ParameterSetName = "AzStackHCI")]
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IFabric], ParameterSetName = "agentlessVMware")]
+function Get-AzMigrateReplicationPolicy {
+    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPolicyModel], ParameterSetName = "AzStackHCI")]
+    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IPolicy], ParameterSetName = "agentlessVMware")]
     [CmdletBinding(DefaultParameterSetName = 'List', PositionalBinding = $false)]
     param(
         [Parameter(Mandatory)]
@@ -33,7 +33,7 @@ function Get-AzMigrateReplicationFabric {
         # The name of the resource group where the recovery services vault is present.
         ${ResourceGroupName},
     
-        [Parameter(ParameterSetName = "agentlessVMware", Mandatory)]
+        [Parameter(Mandatory)]
         [Alias('VaultName')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
@@ -43,8 +43,8 @@ function Get-AzMigrateReplicationFabric {
         [Parameter(ParameterSetName = 'Get', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Fabric name.
-        ${FabricName},
+        # Replication policy name.
+        ${PolicyName},
     
         [Parameter()]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -60,19 +60,6 @@ function Get-AzMigrateReplicationFabric {
         [System.String]
         # Specifies the server migration scenario for which the replication infrastructure needs to be initialized.
         ${Scenario},
-    
-        [Parameter(ParameterSetName = "agentlessVMware")]
-        [Parameter(ParameterSetName = 'Get')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Query')]
-        [System.String]
-        # OData filter options.
-        ${Filter},
-
-        [Parameter(ParameterSetName = 'AzStackHCI')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Query')]
-        [System.String]
-        # Continuation token from the previous call.
-        ${ContinuationToken},
     
         [Parameter()]
         [Alias('AzureRMContext', 'AzureCredential')]
@@ -153,17 +140,17 @@ function Get-AzMigrateReplicationFabric {
         }
 
         if ($scenario -eq "agentlessVMware") {
-            $null = $PSBoundParameters.Remove('ContinuationToken')
+            $null = $PSBoundParameters.Remove('VaultName')
             $null = $PSBoundParameters.Remove('Scenario')
 
-            return Az.Migrate.Internal\Get-AzMigrateReplicationFabricToAzureMigrate @PSBoundParameters
+            return Az.Migrate.Internal\Get-AzMigrateReplicationPolicyToAzureMigrate @PSBoundParameters
         }
         else {
             $null = $PSBoundParameters.Remove('ResourceName')
-            $null = $PSBoundParameters.Remove('Filter')
             $null = $PSBoundParameters.Remove('Scenario')
+            $null = $PSBoundParameters.Add('VaultName', $ResourceName)
             
-            return Get-AzMigrateFabric @PSBoundParameters
+            return Get-AzMigratePolicy @PSBoundParameters
         }
     }
 }
