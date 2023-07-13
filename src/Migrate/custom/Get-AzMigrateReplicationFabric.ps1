@@ -58,7 +58,7 @@ function Get-AzMigrateReplicationFabric {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario for which the replication infrastructure needs to be initialized.
+        # Specifies the server migration scenario.
         ${Scenario},
     
         [Parameter(ParameterSetName = "agentlessVMware")]

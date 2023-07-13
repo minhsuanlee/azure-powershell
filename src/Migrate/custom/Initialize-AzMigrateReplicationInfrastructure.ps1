@@ -45,7 +45,7 @@ function Initialize-AzMigrateReplicationInfrastructure {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario for which the replication infrastructure needs to be initialized.
+        # Specifies the server migration scenario.
         ${Scenario},
 
         [Parameter(ParameterSetName = "agentlessVMware", Mandatory)]
@@ -711,7 +711,7 @@ public static int hashForArtifact(String artifact)
                 throw "Server Discovery Solution missing Appliance Details. Invalid Solution."           
             }
 
-            # Get AzStackHCI Instance Type global variable
+            # Get AzStackHCI InstanceType global variable
             $azstackHCIInstanceTypeObject = Get-Variable `
                 -Name $AzStackHCIGlobalVariableNames.InstanceType `
                 -ErrorVariable notPresent `
@@ -719,17 +719,20 @@ public static int hashForArtifact(String artifact)
             if ($null -eq $azstackHCIInstanceTypeObject) {
                 # TODO: update to support VMwareToAzStackHCI senario
                 $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
-                if (-not ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex)) {
-                    $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                if ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex) {
+                    $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
                 }
                 else {
-                    $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
+                    # $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
+                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
                 }
                 Set-Variable -Name $AzStackHCIGlobalVariableNames.InstanceType -Value $instanceType -Option constant -Scope global
             }
             else {
                 $instanceType = $azstackHCIInstanceTypeObject.Value
+                if ($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
+                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                }
             }
             Write-Host "Running $instanceType scenario."
 
@@ -822,15 +825,15 @@ public static int hashForArtifact(String artifact)
             
                 if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                     $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHcipolicyModelCustomProperties]::new()
+                    $policyCustomProperties.InstanceType = $params.InstanceType
+                    $policyCustomProperties.RecoveryPointHistoryInMinute = $params.RecoveryPointHistoryInMinute
+                    $policyCustomProperties.CrashConsistentFrequencyInMinute = $params.CrashConsistentFrequencyInMinute
+                    $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
                 }
                 else {
-                    $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcipolicyModelCustomProperties]::new()
+                    # $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcipolicyModelCustomProperties]::new()
+                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
                 }
-                $policyCustomProperties.InstanceType = $params.InstanceType
-                $policyCustomProperties.RecoveryPointHistoryInMinute = $params.RecoveryPointHistoryInMinute
-                $policyCustomProperties.CrashConsistentFrequencyInMinute = $params.CrashConsistentFrequencyInMinute
-                $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
-
                 $policyProperties.CustomProperty = $policyCustomProperties
             
                 $policyOperation = New-AzMigratePolicy `
@@ -1035,16 +1038,16 @@ public static int hashForArtifact(String artifact)
             
                 if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                     $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHcireplicationExtensionModelCustomProperties]::new()
+                    $replicationExtensionCustomProperties.InstanceType = $params.InstanceType
+                    $replicationExtensionCustomProperties.HyperVFabricArmId = $params.HyperVFabricArmId
+                    $replicationExtensionCustomProperties.AzStackHCIFabricArmId = $params.AzStackHCIFabricArmId
+                    $replicationExtensionCustomProperties.StorageAccountId = $params.StorageAccountId
+                    $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
                 }
                 else {
-                    $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcireplicationExtensionModelCustomProperties]::new()
+                    # $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcireplicationExtensionModelCustomProperties]::new()
+                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
                 }
-                $replicationExtensionCustomProperties.InstanceType = $params.InstanceType
-                $replicationExtensionCustomProperties.HyperVFabricArmId = $params.HyperVFabricArmId
-                $replicationExtensionCustomProperties.AzStackHCIFabricArmId = $params.AzStackHCIFabricArmId
-                $replicationExtensionCustomProperties.StorageAccountId = $params.StorageAccountId
-                $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
-
                 $replicationExtensionProperties.CustomProperty = $replicationExtensionCustomProperties
             
                 $replicationExtensionOperation = New-AzMigrateReplicationExtension `

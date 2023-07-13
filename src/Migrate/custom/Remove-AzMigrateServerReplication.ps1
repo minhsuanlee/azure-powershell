@@ -54,7 +54,7 @@ function Remove-AzMigrateServerReplication {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario for which the replication infrastructure needs to be initialized.
+        # Specifies the server migration scenario.
         ${Scenario},
 
         [Parameter()]
@@ -205,9 +205,9 @@ function Remove-AzMigrateServerReplication {
 
             $output = Remove-AzMigrateProtectedItem @PSBoundParameters
 
+            # TODO: wait for Get-AzMigrateJob update.
             return $output
 
-            # TODO: wait for Get-AzMigrateJob update.
             # $jobName = $output.Target.Split("/")[14].Split("?")[0]
 
             # $null = $PSBoundParameters.Remove('ForceDelete')
