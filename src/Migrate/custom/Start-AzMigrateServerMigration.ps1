@@ -229,9 +229,9 @@ function Start-AzMigrateServerMigration {
             }
             else {
                 $instanceType = $azstackHCIInstanceTypeObject.Value
-                if ($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI)
-                {
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -or
+                    ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
+                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported. Please re-run Initialize-AzMigrateServerMigration before proceeding."
                 }
             }
 
@@ -258,13 +258,15 @@ function Start-AzMigrateServerMigration {
             
             if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                 $customProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHciPlannedFailoverModelCustomProperties]::new()
-                $customProperties.InstanceType = $instanceType
-                $customProperties.ShutdownSourceVM = $PerformShutDown
+            }
+            elseif ($instanceType -eq $AzStackHCIInstanceTypes.VMwareToAzStackHCI) {
+                $customProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHciPlannedFailoverModelCustomProperties]::new()
             }
             else {
-                # $customProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHciPlannedFailoverModelCustomProperties]::new()
-                throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
             }
+            $customProperties.InstanceType = $instanceType
+            $customProperties.ShutdownSourceVM = $PerformShutDown
             $properties.CustomProperty = $customProperties
 
             $null = $PSBoundParameters.Add('ResourceGroupName', $resourceGroupName)

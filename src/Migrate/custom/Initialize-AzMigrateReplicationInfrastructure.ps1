@@ -634,14 +634,14 @@ public static int hashForArtifact(String artifact)
                     throw "Please login to Azure to select a subscription."
                 }
             }
-            Write-Host "*Selected Subscription Id: ", $SubscriptionId
+            Write-Host "*Selected Subscription Id: '$($SubscriptionId)'."
         
             # Get resource group
             $resourceGroup = Get-AzResourceGroup -Name $ResourceGroupName -ErrorVariable notPresent -ErrorAction SilentlyContinue
             if ($null -eq $resourceGroup) {
                 throw "Resource group '$($ResourceGroupName)' does not exist in the subscription. Please create the resource group and try again."
             }
-            Write-Host "*Selected Resource Group: ", $resourceGroup.ResourceGroupName
+            Write-Host "*Selected Resource Group: '$($resourceGroup.ResourceGroupName)'."
 
             # Verify user validity
             $userObject = Get-AzADUser -UserPrincipalName $context.Subscription.ExtendedProperties.Account
@@ -717,21 +717,24 @@ public static int hashForArtifact(String artifact)
                 -ErrorVariable notPresent `
                 -ErrorAction SilentlyContinue
             if ($null -eq $azstackHCIInstanceTypeObject) {
-                # TODO: update to support VMwareToAzStackHCI senario
                 $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
+                $vmwareSiteTypeRegex = "(?<=/Microsoft.OffAzure/VMwareSites/).*$"
                 if ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex) {
                     $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
                 }
+                elseif ($appMap[$SourceApplianceName.ToLower()] -match $vmwareSiteTypeRegex) {
+                    $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
+                }
                 else {
-                    # $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                    throw "Unknown VM site type encountered. Please verify the VM site type to be either for HyperV or VMware."
                 }
                 Set-Variable -Name $AzStackHCIGlobalVariableNames.InstanceType -Value $instanceType -Option constant -Scope global
             }
             else {
                 $instanceType = $azstackHCIInstanceTypeObject.Value
-                if ($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -or
+                    ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
+                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
                 }
             }
             Write-Host "Running $instanceType scenario."
@@ -822,18 +825,19 @@ public static int hashForArtifact(String artifact)
 
                 # Setup Policy deployment parameters
                 $policyProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.PolicyModelProperties]::new()
-            
                 if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                     $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHcipolicyModelCustomProperties]::new()
-                    $policyCustomProperties.InstanceType = $params.InstanceType
-                    $policyCustomProperties.RecoveryPointHistoryInMinute = $params.RecoveryPointHistoryInMinute
-                    $policyCustomProperties.CrashConsistentFrequencyInMinute = $params.CrashConsistentFrequencyInMinute
-                    $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
+                }
+                elseif ($instanceType -eq $AzStackHCIInstanceTypes.VMwareToAzStackHCI) {
+                    $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcipolicyModelCustomProperties]::new()
                 }
                 else {
-                    # $policyCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcipolicyModelCustomProperties]::new()
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
                 }
+                $policyCustomProperties.InstanceType = $params.InstanceType
+                $policyCustomProperties.RecoveryPointHistoryInMinute = $params.RecoveryPointHistoryInMinute
+                $policyCustomProperties.CrashConsistentFrequencyInMinute = $params.CrashConsistentFrequencyInMinute
+                $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
                 $policyProperties.CustomProperty = $policyCustomProperties
             
                 $policyOperation = New-AzMigratePolicy `
@@ -1009,7 +1013,7 @@ public static int hashForArtifact(String artifact)
                 throw "Invalid Cache Storage Account '$($cacheStorageAccount.StorageAccountName)'.`n" +
                 "Please re-run without -CacheStorageAccountId to automatically create one."
             }
-            Write-Host "*Selected Cache Stroage Account: '$($cacheStorageAccount.StorageAccountName)' in Location '$($cacheStorageAccount.Location)'"
+            Write-Host "*Selected Cache Stroage Account: '$($cacheStorageAccount.StorageAccountName)' in Location '$($cacheStorageAccount.Location)'."
         
             # Put Replication Extension
             $replicationExtensionName = ($sourceFabric.Id -split '/')[-1] + "-" + ($targetFabric.Id -split '/')[-1] + "-MigReplicationExtn"
@@ -1027,8 +1031,8 @@ public static int hashForArtifact(String artifact)
 
                 $params = @{
                     InstanceType                = $instanceType;
-                    HyperVFabricArmId           = $sourceFabric.Id;
-                    AzStackHCIFabricArmId       = $targetFabric.Id;
+                    SourceFabricArmId           = $sourceFabric.Id;
+                    TargetFabricArmId           = $targetFabric.Id;
                     StorageAccountId            = $cacheStorageAccount.Id;
                     StorageAccountSasSecretName = $null;
                 }
@@ -1038,16 +1042,20 @@ public static int hashForArtifact(String artifact)
             
                 if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                     $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHcireplicationExtensionModelCustomProperties]::new()
-                    $replicationExtensionCustomProperties.InstanceType = $params.InstanceType
-                    $replicationExtensionCustomProperties.HyperVFabricArmId = $params.HyperVFabricArmId
-                    $replicationExtensionCustomProperties.AzStackHCIFabricArmId = $params.AzStackHCIFabricArmId
-                    $replicationExtensionCustomProperties.StorageAccountId = $params.StorageAccountId
-                    $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
+                    $replicationExtensionCustomProperties.HyperVFabricArmId = $params.SourceFabricArmId
+                    
+                }
+                elseif ($instanceType -eq $AzStackHCIInstanceTypes.VMwareToAzStackHCI) {
+                    $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcireplicationExtensionModelCustomProperties]::new()
+                    $replicationExtensionCustomProperties.VMwareFabricArmId = $params.SourceFabricArmId
                 }
                 else {
-                    # $replicationExtensionCustomProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHcireplicationExtensionModelCustomProperties]::new()
-                    throw "Currently, for AzStackHCI scenario, only HyperV as the source is supported."
+                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
                 }
+                $replicationExtensionCustomProperties.InstanceType = $params.InstanceType
+                $replicationExtensionCustomProperties.AzStackHCIFabricArmId = $params.TargetFabricArmId
+                $replicationExtensionCustomProperties.StorageAccountId = $params.StorageAccountId
+                $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
                 $replicationExtensionProperties.CustomProperty = $replicationExtensionCustomProperties
             
                 $replicationExtensionOperation = New-AzMigrateReplicationExtension `
