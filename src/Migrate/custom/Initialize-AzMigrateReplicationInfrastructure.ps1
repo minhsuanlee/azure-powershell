@@ -622,7 +622,7 @@ public static int hashForArtifact(String artifact)
             else {
                 $scenario = $scenarioObject.Value
             }
-            Write-Host "Running $scenario scenario to initialize AzMigrate Replication Infrastructure." 
+            Write-Host "Running '$($scenario)' scenario to initialize AzMigrate Replication Infrastructure." 
 
             $context = Get-AzContext
             # Get SubscriptionId
@@ -849,7 +849,7 @@ public static int hashForArtifact(String artifact)
                 $operationId = $policyOperation.Name
 
                 # Check Policy creation status every 5s
-                do {
+                while ($true) {
                     $operationStatus = Get-AzMigratePolicyOperationStatus `
                         -PolicyName $policyName `
                         -ResourceGroupName $resourceGroup.ResourceGroupName `
@@ -858,10 +858,22 @@ public static int hashForArtifact(String artifact)
                         -OperationId $operationId `
                         -ErrorVariable notPresent `
                         -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 5
-                } while ($null -ne $operationStatus -and $operationStatus.Status -ne "Succeeded")
-
-                Write-Host "New Policy created."
+                    if ($null -eq $operationStatus) {
+                        throw "Policy creation failed with no trackable opeartion."                        
+                    }
+                    else {
+                        if ($operationStatus.Status -eq "Running") {
+                            Start-Sleep -Seconds 5
+                        }
+                        elseif ($operationStatus.Status -eq "Succeeded") {
+                            Write-Host "New Policy created."
+                            break
+                        }
+                        else {
+                            throw "Policy creation failed with Status '$($operationStatus.Status)'."
+                        }
+                    }
+                }
             }
             else {
                 Write-Host "Existing Policy found."
@@ -1074,8 +1086,8 @@ public static int hashForArtifact(String artifact)
                     -SubscriptionId $SubscriptionId
                 $operationId = $replicationExtensionOperation.Name
 
-                # Check Replication Extension creation status every 5s
-                do {
+                # Check Replication Extension creation status every 30s
+                while ($true) {
                     $operationStatus = Get-AzMigrateReplicationExtensionOperationStatus `
                         -ReplicationExtensionName $replicationExtensionName `
                         -ResourceGroupName $resourceGroup.ResourceGroupName `
@@ -1084,10 +1096,22 @@ public static int hashForArtifact(String artifact)
                         -OperationId $operationId `
                         -ErrorVariable notPresent `
                         -ErrorAction SilentlyContinue
-                    Start-Sleep -Seconds 5
-                } while ($null -ne $operationStatus -and $operationStatus.Status -ne "Succeeded")
-
-                Write-Host "New Replication Extension created."
+                    if ($null -eq $operationStatus) {
+                        throw "Replication Extension creation failed with no trackable opeartion."                        
+                    }
+                    else {
+                        if ($operationStatus.Status -eq "Running") {
+                            Start-Sleep -Seconds 30
+                        }
+                        elseif ($operationStatus.Status -eq "Succeeded") {
+                            Write-Host "New Replication Extension created."
+                            break
+                        }
+                        else {
+                            throw "Replication Extension creation failed with Status '$($operationStatus.Status)'."
+                        }
+                    }
+                }
             }
             else {
                 Write-Host "Existing Replication Extension found."

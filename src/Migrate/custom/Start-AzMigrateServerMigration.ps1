@@ -254,7 +254,7 @@ function Start-AzMigrateServerMigration {
             $protectedItemName = $protectedItemIdArray[10]
 
             # Setup PlannedFailover deployment parameters
-            $properties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPlannedFailoverModelProperties]::new()
+            $properties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.PlannedFailoverModelProperties]::new()
             
             if ($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) {
                 $customProperties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHciPlannedFailoverModelCustomProperties]::new()
