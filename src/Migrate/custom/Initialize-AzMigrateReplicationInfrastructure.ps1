@@ -22,7 +22,7 @@ The Initialize-AzMigrateReplicationInfrastructure cmdlet initialises the infrast
 https://learn.microsoft.com/powershell/module/az.migrate/initialize-azmigratereplicationinfrastructure
 #>
 function Initialize-AzMigrateReplicationInfrastructure {
-    [OutputType([System.Boolean], ParameterSetName = "AzStackHCI")]
+    [OutputType([System.Object], ParameterSetName = "AzStackHCI")]
     [OutputType([System.Boolean], ParameterSetName = "agentlessVMware")]
     [CmdletBinding(DefaultParameterSetName = 'agentlessVMware', PositionalBinding = $false, SupportsShouldProcess, ConfirmImpact = 'Medium')]
     param(
@@ -732,7 +732,7 @@ public static int hashForArtifact(String artifact)
             }
             else {
                 $instanceType = $azstackHCIInstanceTypeObject.Value
-                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -or
+                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
                     ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
                     throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
                 }
@@ -970,14 +970,16 @@ public static int hashForArtifact(String artifact)
                 # This should never throw.
                 throw "Cache Storage Account '$($cacheStorageAccountName)' may have been accidently deleted. Please re-run this command to re-create it."
             }
-            Write-Host "Existing Cache Stroage Account found."
+            Write-Host "Existing Cache Storage Account found."
 
             # Verify Source Dra AAD App access to Cache Storage Account.
             # As "Contributor"
             $hasAadAppAccess = Get-AzRoleAssignment `
                 -ObjectId $params.sourceAppAadId `
                 -RoleDefinitionId $params.contributorRoleDefId `
-                -Scope $cacheStorageAccount.Id
+                -Scope $cacheStorageAccount.Id `
+                -ErrorVariable notPresent `
+                -ErrorAction SilentlyContinue
             if ($null -eq $hasAadAppAccess) {
                 throw "Invalid Cache Storage Account '$($cacheStorageAccount.StorageAccountName)'.`n" +
                 "Please re-run without -CacheStorageAccountId to automatically create one."
@@ -987,7 +989,9 @@ public static int hashForArtifact(String artifact)
             $hasAadAppAccess = Get-AzRoleAssignment `
                 -ObjectId $params.sourceAppAadId `
                 -RoleDefinitionId $params.storageBlobDataContributorRoleDefId `
-                -Scope $cacheStorageAccount.Id
+                -Scope $cacheStorageAccount.Id `
+                -ErrorVariable notPresent `
+                -ErrorAction SilentlyContinue
             if ($null -eq $hasAadAppAccess) {
                 throw "Invalid Cache Storage Account '$($cacheStorageAccount.StorageAccountName)'.`n" +
                 "Please re-run without -CacheStorageAccountId to automatically create one."
@@ -998,7 +1002,9 @@ public static int hashForArtifact(String artifact)
             $hasAadAppAccess = Get-AzRoleAssignment `
                 -ObjectId $params.targetAppAadId `
                 -RoleDefinitionId $params.contributorRoleDefId `
-                -Scope $cacheStorageAccount.Id
+                -Scope $cacheStorageAccount.Id `
+                -ErrorVariable notPresent `
+                -ErrorAction SilentlyContinue
             if ($null -eq $hasAadAppAccess) {
                 throw "Invalid Cache Storage Account '$($cacheStorageAccount.StorageAccountName)'.`n" +
                 "Please re-run without -CacheStorageAccountId to automatically create one."
@@ -1008,7 +1014,9 @@ public static int hashForArtifact(String artifact)
             $hasAadAppAccess = Get-AzRoleAssignment `
                 -ObjectId $params.targetAppAadId `
                 -RoleDefinitionId $params.storageBlobDataContributorRoleDefId `
-                -Scope $cacheStorageAccount.Id
+                -Scope $cacheStorageAccount.Id `
+                -ErrorVariable notPresent `
+                -ErrorAction SilentlyContinue
             if ($null -eq $hasAadAppAccess) {
                 throw "Invalid Cache Storage Account '$($cacheStorageAccount.StorageAccountName)'.`n" +
                 "Please re-run without -CacheStorageAccountId to automatically create one."
@@ -1099,7 +1107,12 @@ public static int hashForArtifact(String artifact)
             }
             Write-Host "*Selected Replication Extension: '$($replicationExtension.Name)'."
 
-            return $true
+            return @{
+                ReplicationVaultName     = $replicationVaultName;
+                CacheStorageAccountName  = $cacheStorageAccount.StorageAccountName;
+                PolicyName               = $policy.Name;
+                ReplicationExtensionName = $replicationExtension.Name;
+            }
         }        
     }
 }

@@ -229,7 +229,7 @@ function Start-AzMigrateServerMigration {
             }
             else {
                 $instanceType = $azstackHCIInstanceTypeObject.Value
-                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -or
+                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
                     ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
                     throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported. Please re-run Initialize-AzMigrateServerMigration before proceeding."
                 }
