@@ -195,8 +195,8 @@ function Remove-AzMigrateServerReplication {
             $parameterSet = $PSCmdlet.ParameterSetName
 
             if ($parameterSet -eq 'ByInputObject') {
-                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]) {
-                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]. Please verify the Scenario that you are in."
+                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel]) {
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel]. Please verify the Scenario that you are in."
                 }
                 
                 $TargetObjectID = $InputObject.Id
@@ -205,6 +205,7 @@ function Remove-AzMigrateServerReplication {
             $resourceGroupName = $protectedItemIdArray[4]
             $vaultName = $protectedItemIdArray[8]
             $protectedItemName = $protectedItemIdArray[10]
+            
             $null = $PSBoundParameters.Add('ResourceGroupName', $resourceGroupName)
             $null = $PSBoundParameters.Add('VaultName', $vaultName)
             $null = $PSBoundParameters.Add('ProtectedItemName', $protectedItemName)

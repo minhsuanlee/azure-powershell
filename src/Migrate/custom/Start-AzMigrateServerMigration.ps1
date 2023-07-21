@@ -252,17 +252,36 @@ function Start-AzMigrateServerMigration {
             $parameterSet = $PSCmdlet.ParameterSetName
 
             if ($parameterSet -eq 'ByInputObject') {
-                Write-Host $InputObject.GetType().Name
                 if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel]) {
-                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel].`nPlease verify the Scenario that you are in."
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel]. Please verify the Scenario that you are in."
                 }
 
                 $TargetObjectID = $InputObject.Id
             }
+
             $protectedItemIdArray = $TargetObjectID.Split("/")
             $resourceGroupName = $protectedItemIdArray[4]
             $vaultName = $protectedItemIdArray[8]
             $protectedItemName = $protectedItemIdArray[10]
+
+            $null = $PSBoundParameters.Add("ResourceGroupName", $resourceGroupName)
+            $null = $PSBoundParameters.Add("VaultName", $vaultName)
+            $null = $PSBoundParameters.Add("Name", $protectedItemName)
+
+            $protectedItem = Az.Migrate\Get-AzMigrateProtectedItem @PSBoundParameters
+            if ($null -eq $protectedItem) {
+                throw "The replicating server doesn't exist. Please check the input and try again."
+            }
+            elseif (
+                (!$protectedItem.Property.AllowedJob.contains("PlannedFailover")) -and
+                (!$ProtectedItem.Property.AllowedJob.contains("Restart"))) {
+                # AllowJob must contains either 'PlannedFailover' or 'Restart' to allow migration
+                throw "The replicating server cannot be migrated right now. Current protection state is '$($protectedItem.Property.ProtectionStateDescription)'."
+            }
+
+            $null = $PSBoundParameters.Remove("ResourceGroupName")
+            $null = $PSBoundParameters.Remove("VaultName")
+            $null = $PSBoundParameters.Remove("Name")
 
             # Setup PlannedFailover deployment parameters
             $properties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.PlannedFailoverModelProperties]::new()
