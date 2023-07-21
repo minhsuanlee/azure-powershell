@@ -22,7 +22,9 @@ The Remove-AzMigrateServerReplication cmdlet stops the replication for a migrate
 https://learn.microsoft.com/powershell/module/az.migrate/remove-azmigrateserverreplication
 #>
 function Remove-AzMigrateServerReplication {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob])]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob],
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel])]
     [CmdletBinding(DefaultParameterSetName = 'ByID', PositionalBinding = $false)]
     param(
         [Parameter(ParameterSetName = 'ByID', Mandatory)]
@@ -34,6 +36,7 @@ function Remove-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'ByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         # Specifies the machine object of the replicating server.
+        [System.Object]
         ${InputObject},
 
         [Parameter()]
@@ -148,6 +151,10 @@ function Remove-AzMigrateServerReplication {
             $parameterSet = $PSCmdlet.ParameterSetName
 
             if ($parameterSet -eq 'ByInputObject') {
+                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]) {
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]. Please verify the Scenario that you are in."
+                }
+
                 $TargetObjectID = $InputObject.Id
             }
             $MachineIdArray = $TargetObjectID.Split("/")
@@ -188,6 +195,10 @@ function Remove-AzMigrateServerReplication {
             $parameterSet = $PSCmdlet.ParameterSetName
 
             if ($parameterSet -eq 'ByInputObject') {
+                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]) {
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]. Please verify the Scenario that you are in."
+                }
+                
                 $TargetObjectID = $InputObject.Id
             }
             $protectedItemIdArray = $TargetObjectID.Split("/")
@@ -203,26 +214,15 @@ function Remove-AzMigrateServerReplication {
                 $null = $PSBoundParameters.Add('ForceDelete', [System.Convert]::ToBoolean($ForceRemove))
             }
 
-            $output = Remove-AzMigrateProtectedItem @PSBoundParameters
+            $operation = Remove-AzMigrateProtectedItem @PSBoundParameters
+            $jobName = $operation.Target.Split("/")[14].Split("?")[0]
+            
+            $null = $PSBoundParameters.Remove('ProtectedItemName')
+            $null = $PSBoundParameters.Remove('NoWait')
+            $null = $PSBoundParameters.Remove('ForceDelete')
+            $null = $PSBoundParameters.Add('Name', $jobName)
 
-            # TODO: wait for Get-AzMigrateJob update.
-            return $output
-
-            # $jobName = $output.Target.Split("/")[14].Split("?")[0]
-
-            # $null = $PSBoundParameters.Remove('ForceDelete')
-            # $null = $PSBoundParameters.Remove('NoWait')
-            # $null = $PSBoundParameters.Remove('VaultName')
-            # $null = $PSBoundParameters.Remove('ProtectedItemName')
-
-            # $null = $PSBoundParameters.Add('ResourceName', $vaultName)
-            # $null = $PSBoundParameters.Add('JobName', $jobName)
-
-            # return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
-
-            # $null = $PSBoundParameters.Add('OperationId', $jobName)
-
-            # return Get-AzMigrateProtectedItemOperationStatus @PSBoundParameters
+            return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
         }
     }
 }   

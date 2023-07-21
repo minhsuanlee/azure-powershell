@@ -737,7 +737,7 @@ public static int hashForArtifact(String artifact)
                     throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
                 }
             }
-            Write-Host "Running $instanceType scenario."
+            Write-Host "Running '$($instanceType)' instance."
 
             # Get Source and Target Fabrics
             $allFabrics = Get-AzMigrateFabric -ResourceGroupName $resourceGroup.ResourceGroupName
@@ -784,24 +784,23 @@ public static int hashForArtifact(String artifact)
             Write-Host "*Selected Target Dra: '$($targetDra.Name)'."
 
             # Get Data Replication Service
-            $dataReplicationSolutionName = "Servers-Migration-ServerMigration_DataReplication"
-            $dataReplicationSolution = Get-AzMigrateSolution `
+            $solution = Get-AzMigrateSolution `
                 -SubscriptionId $SubscriptionId `
                 -ResourceGroupName $ResourceGroupName `
                 -MigrateProjectName $ProjectName `
-                -Name $dataReplicationSolutionName `
+                -Name "Servers-Migration-ServerMigration_DataReplication" `
                 -ErrorVariable notPresent `
                 -ErrorAction SilentlyContinue
-            if ($dataReplicationSolution.Name -ne $dataReplicationSolutionName) {
-                throw "Data Replication Service not found."
+            if ($solution -and ($solution.Count -ge 1)) {
+                # Get Replication Vault
+                $replicationVaultName = $solution.DetailExtendedDetail["vaultId"].Split("/")[8]
+                $replicationVault = Get-AzMigrateVault -ResourceGroupName $resourceGroup.ResourceGroupName -Name $replicationVaultName
+                if ($null -eq $replicationVault) {
+                    throw "No Replication Vault found in Resource Group '$($resourceGroup.ResourceGroupName)'."
+                }
             }
-
-            # Get Replication Vault
-            $replicationVaultId = $dataReplicationSolution.DetailExtendedDetail["vaultId"]
-            $replicationVaultName = $replicationVaultId.Split("/")[8]
-            $replicationVault = Get-AzMigrateVault -ResourceGroupName $resourceGroup.ResourceGroupName -Name $replicationVaultName
-            if ($null -eq $replicationVault) {
-                throw "No Replication Vault found in Resource Group '$($resourceGroup.ResourceGroupName)'."
+            else {
+                throw "No Data Replication Service Solution found."
             }
 
             # Put Policy

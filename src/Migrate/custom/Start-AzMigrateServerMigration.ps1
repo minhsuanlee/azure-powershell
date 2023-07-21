@@ -22,7 +22,9 @@ Starts the migration for the replicating server.
 https://learn.microsoft.com/powershell/module/az.migrate/start-azmigrateservermigration
 #>
 function Start-AzMigrateServerMigration {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob])]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob],
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel])]
     [CmdletBinding(DefaultParameterSetName = 'ByID', PositionalBinding = $false)]
     param(
         [Parameter(ParameterSetName = 'ByID', Mandatory)]
@@ -41,8 +43,8 @@ function Start-AzMigrateServerMigration {
 
         [Parameter(ParameterSetName = 'ByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]
         # Specifies the replicating server for which migration needs to be initiated. The server object can be retrieved using the Get-AzMigrateServerReplication cmdlet.
+        [System.Object]
         ${InputObject},
 
         [Parameter()]
@@ -162,6 +164,10 @@ function Start-AzMigrateServerMigration {
 
                 
             if ($parameterSet -eq 'ByInputObject') {
+                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]) {
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]. Please verify the Scenario that you are in."
+                }
+
                 $TargetObjectID = $InputObject.Id
             }
             $MachineIdArray = $TargetObjectID.Split("/")
@@ -246,6 +252,11 @@ function Start-AzMigrateServerMigration {
             $parameterSet = $PSCmdlet.ParameterSetName
 
             if ($parameterSet -eq 'ByInputObject') {
+                Write-Host $InputObject.GetType().Name
+                if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel]) {
+                    throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IProtectedItemModel].`nPlease verify the Scenario that you are in."
+                }
+
                 $TargetObjectID = $InputObject.Id
             }
             $protectedItemIdArray = $TargetObjectID.Split("/")
@@ -275,12 +286,15 @@ function Start-AzMigrateServerMigration {
             $null = $PSBoundParameters.Add('NoWait', $true)
             $null = $PSBoundParameters.Add('Property', $properties)
 
-            $output = Az.Migrate.Internal\Invoke-AzMigratePlannedProtectedItemFailover @PSBoundParameters
+            $operation = Az.Migrate.Internal\Invoke-AzMigratePlannedProtectedItemFailover @PSBoundParameters
+            $jobName = $operation.Target.Split("/")[14].Split("?")[0]
 
+            $null = $PSBoundParameters.Remove('ProtectedItemName')  
             $null = $PSBoundParameters.Remove('NoWait')
+            $null = $PSBoundParameters.Remove('Property')
+            $null = $PSBoundParameters.Add('Name', $jobName)
 
-            # TODO: wait for Get-AzMigrateJob update.
-            return $output
+            return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
         }
     }
 }
