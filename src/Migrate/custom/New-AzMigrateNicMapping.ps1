@@ -22,16 +22,22 @@ The New-AzMigrateNicMapping cmdlet creates a mapping of the source NIC attached 
 https://learn.microsoft.com/powershell/module/az.migrate/new-azmigratenicmapping
 #>
 function New-AzMigrateNicMapping {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IVMwareCbtNicInput])]
-    [CmdletBinding(DefaultParameterSetName = 'VMwareCbt', PositionalBinding = $false)]
+    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IHyperVToAzStackHCINicInput], ParameterSetName = "AzStackHCI")]
+    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IVMwareCbtNicInput], ParameterSetName = "agentlessVMware")]
+    [CmdletBinding(DefaultParameterSetName = 'agentlessVMware', PositionalBinding = $false)]
     param(
+        [Parameter(ParameterSetName = 'AzStackHCI', Mandatory, Position = 0)]
+        [Switch]
+        # Specifies the migration target is AzStackHCI.
+        ${AzStackHCI},
+
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the ID of the NIC to be updated.
         ${NicID},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [ValidateSet("primary" , "secondary", "donotcreate")]
         [ArgumentCompleter({"primary" , "secondary", "donotcreate"})]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -39,91 +45,118 @@ function New-AzMigrateNicMapping {
         # Specifies whether the NIC to be updated will be the primary, secondary or not migrated.
         ${TargetNicSelectionType},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the Subnet name for the NIC in the destination Virtual Network to which the server needs to be migrated.
         ${TargetNicSubnet},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the name of the NIC to be created.
         ${TargetNicName},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the IP within the destination subnet to be used for the NIC.
         ${TargetNicIP},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the Subnet name for the NIC in the destination Virtual Network to which the server needs to be test migrated.
         ${TestNicSubnet},
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'agentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the IP within the destination test subnet to be used for the NIC.
-        ${TestNicIP}
+        ${TestNicIP},
+
+        [Parameter(ParameterSetName = 'AzStackHCI')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the target network ID within the HCI cluster.
+        ${TargetNetworkId}
     )
     
     process {
-        $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.VMwareCbtNicInput]::new()
-        $NicObject.NicId = $NicID
-        if ($PSBoundParameters.ContainsKey('TargetNicSelectionType')) {
-            if ($TargetNicSelectionType -eq 'primary') {
-                $NicObject.IsPrimaryNic = "true"
-                $NicObject.IsSelectedForMigration = "true"
-            }
-            elseif ($TargetNicSelectionType -eq 'secondary') {
-                $NicObject.IsPrimaryNic = "false"
-                $NicObject.IsSelectedForMigration = "true"
-            }
-            elseif ($TargetNicSelectionType -eq 'donotcreate') {
-                $NicObject.IsPrimaryNic = "false"
-                $NicObject.IsSelectedForMigration = "false"
-            }
+        if ($PSBoundParameters.ContainsKey('AzStackHCI')) {
+            $scenario = "AzStackHCI"
         }
-        if ($PSBoundParameters.ContainsKey('TargetNicSubnet')) {
-            $NicObject.TargetSubnetName = $TargetNicSubnet
-        }
-       
-        if ($PSBoundParameters.ContainsKey('TargetNicIP')) {
-            $isValidIpAddress = [ipaddress]::TryParse($TargetNicIP,[ref][ipaddress]::Loopback)
-            if(!$isValidIpAddress) {
-                throw "(InvalidPrivateIPAddressFormat) Static IP address value '$($TargetNicIP)' is invalid."
-            }
-            $NicObject.TargetStaticIPAddress = $TargetNicIP
+        else {
+            $scenario = "agentlessVMware"
         }
 
-        if ($PSBoundParameters.ContainsKey('TargetNicName')) {
-            if ($TargetNicName.length -gt 80 -or $TargetNicName.length -eq 0) {
-                throw "The NIC name must be between 1 and 80 characters long."
-            }
+        # Remove common optional parameter -AzStackHCI
+        $null = $PSBoundParameters.Remove('AzStackHCI')
 
-            if ($TargetNicName -notmatch "^[^_\W][a-zA-Z0-9_\-\.]{0,79}(?<![-.])$") {
-                throw "The NIC name must begin with a letter or number, end with a letter, number or underscore, and may contain only letters, numbers, underscores, periods, or hyphens."
+        if ($scenario -eq "agentlessVMware") {
+            $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.VMwareCbtNicInput]::new()
+            $NicObject.NicId = $NicID
+            if ($PSBoundParameters.ContainsKey('TargetNicSelectionType')) {
+                if ($TargetNicSelectionType -eq 'primary') {
+                    $NicObject.IsPrimaryNic = "true"
+                    $NicObject.IsSelectedForMigration = "true"
+                }
+                elseif ($TargetNicSelectionType -eq 'secondary') {
+                    $NicObject.IsPrimaryNic = "false"
+                    $NicObject.IsSelectedForMigration = "true"
+                }
+                elseif ($TargetNicSelectionType -eq 'donotcreate') {
+                    $NicObject.IsPrimaryNic = "false"
+                    $NicObject.IsSelectedForMigration = "false"
+                }
             }
-            $NicObject.TargetNicName = $TargetNicName
-        }
-
+            if ($PSBoundParameters.ContainsKey('TargetNicSubnet')) {
+                $NicObject.TargetSubnetName = $TargetNicSubnet
+            }
         
-        if ($PSBoundParameters.ContainsKey('TestNicSubnet')) {
-            $NicObject.TestSubnetName = $TestNicSubnet
-        }
-       
-        if ($PSBoundParameters.ContainsKey('TestNicIP')) {
-            $isValidIpAddress = [ipaddress]::TryParse($TestNicIP,[ref][ipaddress]::Loopback)
-            if(!$isValidIpAddress) {
-                throw "(InvalidPrivateIPAddressFormat) Static IP address value '$($TestNicIP)' is invalid."
+            if ($PSBoundParameters.ContainsKey('TargetNicIP')) {
+                $isValidIpAddress = [ipaddress]::TryParse($TargetNicIP,[ref][ipaddress]::Loopback)
+                if(!$isValidIpAddress) {
+                    throw "(InvalidPrivateIPAddressFormat) Static IP address value '$($TargetNicIP)' is invalid."
+                }
+                $NicObject.TargetStaticIPAddress = $TargetNicIP
             }
-            $NicObject.TestStaticIPAddress = $TestNicIP
-        }
 
-        return $NicObject
+            if ($PSBoundParameters.ContainsKey('TargetNicName')) {
+                if ($TargetNicName.length -gt 80 -or $TargetNicName.length -eq 0) {
+                    throw "The NIC name must be between 1 and 80 characters long."
+                }
+
+                if ($TargetNicName -notmatch "^[^_\W][a-zA-Z0-9_\-\.]{0,79}(?<![-.])$") {
+                    throw "The NIC name must begin with a letter or number, end with a letter, number or underscore, and may contain only letters, numbers, underscores, periods, or hyphens."
+                }
+                $NicObject.TargetNicName = $TargetNicName
+            }
+
+            
+            if ($PSBoundParameters.ContainsKey('TestNicSubnet')) {
+                $NicObject.TestSubnetName = $TestNicSubnet
+            }
+        
+            if ($PSBoundParameters.ContainsKey('TestNicIP')) {
+                $isValidIpAddress = [ipaddress]::TryParse($TestNicIP,[ref][ipaddress]::Loopback)
+                if(!$isValidIpAddress) {
+                    throw "(InvalidPrivateIPAddressFormat) Static IP address value '$($TestNicIP)' is invalid."
+                }
+                $NicObject.TestStaticIPAddress = $TestNicIP
+            }
+
+            return $NicObject
+        }
+        else {
+            $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IHyperVToAzStackHCINicInput]::new()
+            $NicObject.NicId = $NicID
+            $NicObject.TargetNetworkId = $TargetNetworkId
+            $NicObject.TestNetworkId = $TargetNetworkId
+            $NicObject.SelectionTypeForFailover = "SelectedByUser"
+
+            return $NicObject
+        }
     }
 
 }   
