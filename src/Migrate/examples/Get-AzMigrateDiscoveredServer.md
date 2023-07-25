@@ -57,13 +57,13 @@ List all servers for an appliance in a project.
 
 ### Example 4: Get in an appliance
 ```powershell
-Get-AzMigrateDiscoveredServer -Name idclab-a360-fareast-corp-micros-86617dcf-effe-59ad-8c3a-cdd3ea7300d3_5029e62c-31d2-a6c3-5316-aa39f47c49fc -ApplianceName BBVMwareAVS -SubscriptionId xxx-xxx-xxx -ResourceGroupName julytest -ProjectName julytest
+Get-AzMigrateDiscoveredServer -Name 7b542bc5-89da-4bf1-87e7-e83ef7d25634 -ApplianceName HyperVSrcApp -SubscriptionId xxx-xxx-xxx -ResourceGroupName test-rg -ProjectName testproj
 ```
 
 ```output
 Name                                                                                                      Typeo…
 ----                                                                                                      ----o…
-idclab-a360-fareast-corp-micros-86617dcf-effe-59ad-8c3a-cdd3ea7300d3_5029e62c-31d2-a6c3-5316-aa39f47c49fc Microsoft.OffAzure/VMwareSites/machines
+7b542bc5-89da-4bf1-87e7-e83ef7d25634                                                                      Microsoft.OffAzure/HyperVSites/machines
 
 ```
 Get a server for an appliance in a project. Name is a unique paramenter for a server.
