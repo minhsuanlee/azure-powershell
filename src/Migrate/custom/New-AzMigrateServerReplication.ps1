@@ -39,12 +39,22 @@ function New-AzMigrateServerReplication {
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the machine ID of the discovered server to be migrated.
-        ${MachineId},
+        ${MachineId},        
+
+        [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObjectDefaultUser', Mandatory)]
+        [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObjectPowerUser', Mandatory)]
+        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser', Mandatory)]
+        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory)]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.Object]
+        # Specifies the discovered server to be migrated. The server object can be retrieved using the Get-AzMigrateServer cmdlet.
+        ${InputObject},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdDefaultUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory)]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the storage path used when setting up ARC.
         ${TargetStoragePathId},
@@ -53,6 +63,7 @@ function New-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Int32]
         # Specifies the number of CPU cores.
         ${TargetVMCPUCores},
@@ -61,6 +72,7 @@ function New-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the virtual switch to use. 
         ${TargetVirtualSwitch},
@@ -69,6 +81,7 @@ function New-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Boolean]
         # Specifies if RAM is dynamic or not. 
         ${IsDynamicMemoryEnabled},
@@ -77,32 +90,24 @@ function New-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Int64]
         # Specifies the target RAM size in MB. 
         ${TargetVMRam},
-
-        [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObjectDefaultUser', Mandatory)]
-        [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObjectPowerUser', Mandatory)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser', Mandatory)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory)]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        # [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202001.IVMwareMachine]
-        # Specifies the discovered server to be migrated. The server object can be retrieved using the Get-AzMigrateServer cmdlet.
-        ${InputObject},
 
         [Parameter(ParameterSetName = 'AgentlessVMware_ByIdPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObjectPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        # [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IVMwareCbtDiskInput[]]
+        [System.Object[]]
         # Specifies the disks on the source server to be included for replication.
         ${DiskToInclude},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        # [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IHyperVToAzStackHCINicInput[]]
+        [System.Object[]]
         # Specifies the nics on the source server to be included for replication.
         ${NicToInclude},
 
@@ -903,8 +908,6 @@ public static int hashForArtifact(String artifact)
                 throw "Site not found"
             }
 
-            Write-Host "ProjectName: $ProjectName"
-
             # Get the solution to get vault name.
             $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
             $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration_DataReplication")
@@ -936,13 +939,13 @@ public static int hashForArtifact(String artifact)
             # Get Source and Target Fabrics
             $allFabrics = Az.Migrate\Get-AzMigrateFabric -ResourceGroupName $ResourceGroupName
             foreach ($fabric in $allFabrics) {
-                if ($fabric.CustomPropertyInstanceType -ceq $FabricInstanceTypes.HyperVInstance) {
+                if ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.HyperVInstance) {
                     $sourceFabric = $fabric
                 }
-                elseif ($fabric.CustomPropertyInstanceType -ceq $FabricInstanceTypes.VmwareInstance) {
+                elseif ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.VmwareInstance) {
                     $sourceFabric = $fabric
                 }
-                elseif ($fabric.CustomPropertyInstanceType -ceq $FabricInstanceTypes.AzStackHCIInstance) {
+                elseif ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.AzStackHCIInstance) {
                     $targetFabric = $fabric
                 }
             }
@@ -961,7 +964,6 @@ public static int hashForArtifact(String artifact)
                 throw "Source Dra not found. Please verify your appliance setup."
             }
             $sourceDra = $sourceDras[0]
-            Write-Host "*Selected Source Dra: '$($sourceDra.Name)'."
 
             $targetDras = Get-AzMigrateDra `
                 -FabricName $targetFabric.Name `
@@ -972,7 +974,7 @@ public static int hashForArtifact(String artifact)
                 throw "Target Dra not found. Please verify your appliance setup."
             }
             $targetDra = $targetDras[0]
-            Write-Host "*Selected Target Dra: '$($targetDra.Name)'."
+
             # Get Replication Extension
             $replicationExtensionName = ($sourceFabric.Id -split '/')[-1] + "-" + ($targetFabric.Id -split '/')[-1] + "-MigReplicationExtn"
             $replicationExtension = Get-AzMigrateReplicationExtension `
@@ -982,8 +984,7 @@ public static int hashForArtifact(String artifact)
                 -SubscriptionId $SubscriptionId `
                 -ErrorVariable notPresent `
                 -ErrorAction SilentlyContinue
-            Write-Host "*replicationExtensionName '$($replicationExtensionName)'."
-            Write-Host "*replicationExtension '$($replicationExtension)'."
+
             if ($null -eq $replicationExtension) {
                 throw "The replication infrastructure is not initialized. Run the initialize-azmigratereplicationinfrastructure script again."
             }
@@ -996,7 +997,6 @@ public static int hashForArtifact(String artifact)
                 throw "Provided target storage path is not found."
             }
             $storageContainer = ConvertFrom-Json $response.Content
-            Write-Host "*storageContainer '$($storageContainer)'."
 
             # Get RunAsAccount
             if ($SiteType -eq $SiteTypes.HyperVSites) {
@@ -1014,7 +1014,6 @@ public static int hashForArtifact(String artifact)
                 $runAsAccount = $runAsAccounts | Where-Object { $_.CredentialType -eq $RunAsAccountCredentialTypes.VMwareFabric}
             }
              
-            Write-Host "*runAsAccount '$($runAsAccount)'."
             if ($null -eq $runAsAccount) {
                 throw "Site run as account is not found."
             }
@@ -1051,7 +1050,7 @@ public static int hashForArtifact(String artifact)
             $customProperties.StorageContainerId                  = $storageContainer.Id
             $customProperties.TargetArcClusterCustomLocationId    = $storageContainer.ExtendedLocation.Name
             $customProperties.TargetDraName                       = $targetDra.Name
-            $customProperties.TargetHciClusterId                  = "/Subscriptions/40b6d51e-c6c9-47c8-9203-52fdeaec6d1e/resourceGroups/mayadahciclus3-rg/providers/Microsoft.AzureStackHCI/clusters/mayadahciclus3" # TODO: fix this= $targetFabric.Property.CustomProperty.Cluster.ResourceName
+            $customProperties.TargetHciClusterId                  = $targetFabric.Property.CustomProperty.Cluster.ResourceName
             $customProperties.TargetResourceGroupId               = $TargetResourceGroupId
             $customProperties.TargetVMName                        = $TargetVMName
             $customProperties.TargetNetworkId                     = $TargetVirtualSwitch
@@ -1061,13 +1060,19 @@ public static int hashForArtifact(String artifact)
             $customProperties.IsDynamicRam                        = if ($HasIsDynamicMemoryEnabled) { $IsDynamicMemoryEnabled } else { $InputObject.IsDynamicMemoryEnabled }
             
             if ($customProperties.IsDynamicRam) {
-                $customProperties.DynamicMemoryConfigMaximumMemoryInMegaByte = $InputObject.MaxMemoryMb
-                $customProperties.DynamicMemoryConfigMinimumMemoryInMegaByte = $DynamicMemoryConfig.MinimumMemoryInMegaByte
-                $customProperties.DynamicMemoryConfigTargetMemoryBufferPercentage = $DynamicMemoryConfig.TargetMemoryBufferPercentage
+                $memoryConfig = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.ProtectedItemDynamicMemoryConfig]::new()
+                $memoryConfig.MaximumMemoryInMegaByte = $InputObject.MaxMemoryMb
+                $memoryConfig.MinimumMemoryInMegaByte = $DynamicMemoryConfig.MinimumMemoryInMegaByte
+                $memoryConfig.TargetMemoryBufferPercentage = $DynamicMemoryConfig.TargetMemoryBufferPercentage
+                $customProperties.DynamicMemoryConfig = $memoryConfig
             }
             
             if ($parameterSet -match 'DefaultUser') {
-                # TODO: Validate OSDiskId provided -- check if id exists and is infact os disk. Check for duplicate too
+                $osDisk = $InputObject.Disk | Where-Object { $_.InstanceId -eq $OSDiskID }
+                if ($null -eq $osDisk) {
+                    throw "The OSDiskID provided is not found."
+                }
+
                 [PSCustomObject[]]$DiskToInclude = @()
                 foreach ($sourceDisk in $InputObject.Disk) {
                     $DiskObject = [PSCustomObject]@{
@@ -1080,7 +1085,6 @@ public static int hashForArtifact(String artifact)
                     $DiskToInclude += $DiskObject
                 }
 
-                # TODO: Validate switch provided. Check for duplicate too
                 [PSCustomObject[]]$NicToInclude = @()
                 foreach ($sourceNic in $InputObject.NetworkAdapter) {
                     $NicObject = [PSCustomObject]@{
@@ -1092,7 +1096,41 @@ public static int hashForArtifact(String artifact)
                     $NicToInclude += $NicObject
                 }
             }
-            
+            else {
+                # Validate OSDisk is set.
+                $osDisk = $InputObject.Disk | Where-Object { $_.IsOSDisk -eq $True }
+                if (($null -eq $osDisk) -or ($osDisk.length -ne 1)) {
+                    throw "One disk must be set as OS Disk."
+                }
+                
+                # Validate no duplicates in the list
+                foreach ($disk in $DiskToInclude)
+                {
+                    $discoveredDisk = $InputObject.Disk | Where-Object { $_.InstanceId -eq $disk.DiskId }
+                    if ($null -eq $discoveredDisk){
+                        throw "The disk uuid '$($disk.DiskId)' is not found."
+                    }
+
+                    if ($uniqueDisks.Contains($disk.DiskId)) {
+                        throw "The disk uuid '$($disk.DiskId)' is already taken."
+                    }
+                    $res = $uniqueDisks.Add($disk.DiskId)
+                }
+                # Validate no duplicates in the list
+                foreach ($nic in $NicToInclude)
+                {
+                    $discoveredNic = $InputObject.NetworkAdapter | Where-Object { $_.NicId -eq $nic.NicId }
+                    if ($null -eq $discoveredNic){
+                        throw "The Nic id '$($nic.NicId)' is not found."
+                    }
+
+                    if ($uniqueNics.Contains($nic.NicId)) {
+                        throw "The Nic id '$($nic.NicId)' is already taken."
+                    }
+                    $res = $uniqueNics.Add($nic.NicId)
+                }
+            }
+
             if ($SiteType -eq $SiteTypes.HyperVSites) {     
                 $customProperties.DisksToInclude = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHCIDiskInput[]]$DiskToInclude
                 $customProperties.NicsToInclude = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHCINicInput[]]$NicToInclude

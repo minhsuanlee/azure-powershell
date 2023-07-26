@@ -102,9 +102,17 @@ directive:
     - ProtectionContainerMappingProviderSpecificDetails
     - MigrateProjectProperties
     - FabricProperties
+    - FabricModelProperties
+    - FabricModelCustomProperties
+    - AzStackHCIFabricModelCustomProperties
+    - HyperVMigrateFabricModelCustomProperties
+    - VMwareMigrateFabricModelCustomProperties
     - PolicyModelProperties
     - ReplicationExtensionModelProperties
     - ProtectedItemModelProperties
+    - ProtectedItemModelCustomProperties
+    - HyperVToAzStackHCIProtectedItemModelCustomProperties
+    - VMwareToAzStackHCIProtectedItemModelCustomProperties
     - PlannedFailoverModelProperties
   # Remove variants not in scope
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json

@@ -22,7 +22,6 @@ The Set-AzMigrateServerReplication cmdlet updates the target properties for the 
 https://learn.microsoft.com/powershell/module/az.migrate/set-azmigrateserverreplication
 #>
 function Set-AzMigrateServerReplication {
-    # [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob])]
     [CmdletBinding(DefaultParameterSetName = 'AgentlessVMware_ByID', PositionalBinding = $false)]
     param(
         [Parameter(ParameterSetName = 'AzStackHCI_ByID', Mandatory, Position = 0)]
@@ -41,7 +40,7 @@ function Set-AzMigrateServerReplication {
         [Parameter(ParameterSetName = 'AgentlessVMware_ByInputObject', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        # [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]
+        [System.Object]
         # Specifies the replicating server for which the properties need to be updated. The server object can be retrieved using the Get-AzMigrateServerReplication cmdlet.
         ${InputObject},
 
@@ -196,34 +195,36 @@ function Set-AzMigrateServerReplication {
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByID')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Int32]
         # Specifies the number of CPU cores.
         ${TargetVMCPUCores},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByID')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject')]
-        [System.Int32]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the virtual switch to use. 
         ${TargetVirtualSwitch},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByID')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject')]
-        [System.Int32]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Boolean]
         # Specifies if RAM is dynamic or not. 
         ${IsDynamicMemoryEnabled},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByID')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject')]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.Int64]
         # Specifies the target RAM size in MB. 
         ${TargetVMRam},
 		
         [Parameter(ParameterSetName = 'AzStackHCI_ByID')]
         [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject')]
-        [System.Int32]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.Object]
         # Specifies the nics on the source server to be included for replication.
         ${NicToInclude},
 
@@ -907,7 +908,7 @@ function Set-AzMigrateServerReplication {
             $null = $PSBoundParameters.Add("Name", $MachineName)
     
             $ProtectedItem = Get-AzMigrateProtectedItem @PSBoundParameters
-            # TODO (helenafework): FIX: $ProtectedItem.Property.CustomProperty doesn't have data other than instantType
+
             $customProperties = $ProtectedItem.Property.CustomProperty
             if ($HasTargetVMName) {
                 if ($TargetVMName.length -gt 64 -or $TargetVMName.length -eq 0) {
@@ -942,14 +943,15 @@ function Set-AzMigrateServerReplication {
                 $customProperties.IsDynamicRam = $IsDynamicRam
 
                 if ($customProperties.IsDynamicRam) {
-                    $customProperties.DynamicMemoryConfigMaximumMemoryInMegaByte = $customProperties.TargetMemoryInMegaByte
-                    $customProperties.DynamicMemoryConfigMinimumMemoryInMegaByte = $DynamicMemoryConfig.MinimumMemoryInMegaByte
-                    $customProperties.DynamicMemoryConfigTargetMemoryBufferPercentage = $DynamicMemoryConfig.TargetMemoryBufferPercentage
+                    $dynamicMemoryConfig = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.ProtectedItemDynamicMemoryConfig]::new()
+                    $dynamicMemoryConfig.MaximumMemoryInMegaByte = $customProperties.TargetMemoryInMegaByte
+                    $dynamicMemoryConfig.MinimumMemoryInMegaByte = $DynamicMemoryConfig.MinimumMemoryInMegaByte
+                    $dynamicMemoryConfig.TargetMemoryBufferPercentage = $DynamicMemoryConfig.TargetMemoryBufferPercentage
+                    $customProperties.DynamicMemoryConfig = $dynamicMemoryConfig
                 }
             }
 
             if ($HasNicToInclude -and $NicToInclude.length -gt 0) {
-                # TODO (helenafework): pull machine from discovery and validate nicIds provided.
                 $customProperties = $NicToInclude;
             }               
 
