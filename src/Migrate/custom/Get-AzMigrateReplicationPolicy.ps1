@@ -23,8 +23,9 @@ Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPolicyMode
 https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratereplicationpolicytoazuremigrate
 #>
 function Get-AzMigrateReplicationPolicy {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPolicyModel], ParameterSetName = "AzStackHCI")]
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IPolicy], ParameterSetName = "agentlessVMware")]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IPolicyModel],
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IPolicy])]
     [CmdletBinding(DefaultParameterSetName = 'List', PositionalBinding = $false)]
     param(
         [Parameter(Mandatory)]
@@ -34,7 +35,6 @@ function Get-AzMigrateReplicationPolicy {
         ${ResourceGroupName},
     
         [Parameter(Mandatory)]
-        [Alias('VaultName')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # The name of the recovery services vault.
@@ -58,7 +58,7 @@ function Get-AzMigrateReplicationPolicy {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario.
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
         ${Scenario},
     
         [Parameter()]
@@ -111,47 +111,28 @@ function Get-AzMigrateReplicationPolicy {
     )
     
     process {
-        # Honor -Scenario if it is provided.
-        if ($PSBoundParameters.ContainsKey('Scenario')) {
-            if ($Scenario -eq "agentlessVMware") {
-                $scenario = "agentlessVMware"
-            }
-            else {
-                # AzStackHCI
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-            }
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            # Remove common optional parameter -Scenario
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                # Default to agentlessVMware
-                $scenario = "agentlessVMware"
-            }
-            else {
-                $scenario = $scenarioObject.Value
-                if ($scenario -ne $AzStackHCIInstanceTypes.AzStackHCI) {
-                    throw "Unknown Scenario '$($scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
-                }
-            }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Sceanrio')){
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio']
         }
 
-        # Remove common optional parameter -Scenario
-        $null = $PSBoundParameters.Remove('Scenario')
-
-        if ($scenario -eq "agentlessVMware") {
-            $null = $PSBoundParameters.Remove('VaultName')
-
+        if ([string]::IsNullOrEmpty($Scenario) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            # 'agenlessVMware' scenario for migrating to Azure
             return Az.Migrate.Internal\Get-AzMigrateReplicationPolicyToAzureMigrate @PSBoundParameters
         }
-        else {
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            # 'AzStackHCI' scenario for migrating to AzStackHCI
             $null = $PSBoundParameters.Remove('ResourceName')
             $null = $PSBoundParameters.Add('VaultName', $ResourceName)
             
             return Get-AzMigratePolicy @PSBoundParameters
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }

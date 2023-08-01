@@ -57,7 +57,7 @@ function Remove-AzMigrateServerReplication {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario.
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
         ${Scenario},
 
         [Parameter()]
@@ -109,38 +109,17 @@ function Remove-AzMigrateServerReplication {
     )
     
     process {
-        # Honor -Scenario if it is provided.
-        if ($PSBoundParameters.ContainsKey('Scenario')) {
-            if ($Scenario -eq "agentlessVMware") {
-                $scenario = "agentlessVMware"
-            }
-            else {
-                # AzStackHCI
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-            }
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            # Remove common optional parameter -Scenario
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                # Default to agentlessVMware
-                $scenario = "agentlessVMware"
-            }
-            else {
-                $scenario = $scenarioObject.Value
-                if ($scenario -ne $AzStackHCIInstanceTypes.AzStackHCI) {
-                    throw "Unknown Scenario '$($scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
-                }
-            }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Sceanrio')){
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio']
         }
 
-        # Remove common optional parameter -Scenario
-        $null = $PSBoundParameters.Remove('Scenario')
-
-        if ($scenario -eq "agentlessVMware") {
+        if ([string]::IsNullOrEmpty($Scenario) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            # 'agenlessVMware' scenario for migrating to Azure
             $hasDeleteOption = $PSBoundParameters.ContainsKey('ForceRemove')
             $null = $PSBoundParameters.Remove('ForceRemove')
             $null = $PSBoundParameters.Remove('TargetObjectID')
@@ -187,7 +166,8 @@ function Remove-AzMigrateServerReplication {
             
             return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
         }
-        else {
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            # 'AzStackHCI' scenario for migrating to AzStackHCI
             $hasDeleteOption = $PSBoundParameters.ContainsKey('ForceRemove')
             $null = $PSBoundParameters.Remove('ForceRemove')
             $null = $PSBoundParameters.Remove('TargetObjectID')
@@ -224,6 +204,9 @@ function Remove-AzMigrateServerReplication {
             $null = $PSBoundParameters.Add('Name', $jobName)
 
             return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }   

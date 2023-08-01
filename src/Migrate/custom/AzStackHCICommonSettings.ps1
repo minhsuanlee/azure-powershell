@@ -1,17 +1,17 @@
-$AzStackHCIGlobalVariableNames = @{
-    Scenario     = "AzMigrate-Scenario";
-    InstanceType = "AzMigrate-AzStackHCIInstanceType"
+$AzMigrateSupportedScenarios = @{
+    agentlessVMware = "agentlessVMware";
+    AzStackHCI      = "AzStackHCI";
 }
 
 $AzStackHCIInstanceTypes = @{
     HyperVToAzStackHCI = "HyperVToAzStackHCI";
     VMwareToAzStackHCI = "VMwareToAzStackHCI";
-    AzStackHCI         = "AzStackHCI";
 }
 
 # Fabric instances
 $FabricInstanceTypes = @{
     HyperVInstance     = "HyperVMigrate";
+    VMwareInstance     = "VMwareMigrate";
     AzStackHCIInstance = "AzStackHCI";
 }
 

@@ -23,10 +23,9 @@ https://learn.microsoft.com/powershell/module/az.migrate/start-azmigrateservermi
 #>
 function Start-AzMigrateServerMigration {
     [OutputType(
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob],
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel])]
-    [CmdletBinding(DefaultParameterSetName = 'ByID', PositionalBinding = $false)]
-    param(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel],
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob])]
+    param(    
         [Parameter(ParameterSetName = 'ByID', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
@@ -38,7 +37,7 @@ function Start-AzMigrateServerMigration {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario.
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
         ${Scenario},
 
         [Parameter(ParameterSetName = 'ByInputObject', Mandatory)]
@@ -50,7 +49,7 @@ function Start-AzMigrateServerMigration {
         [Parameter()]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the target version to which the Os has to be upgraded to. The valid values can be selected from SupportedOSVersions retrieved using Get-AzMigrateServerReplication cmdlet.
+        # Specifies the target version to which the Os has to be upgraded to. This is only supported in 'agentlessVMware' scenario. The valid values can be selected from SupportedOSVersions retrieved using Get-AzMigrateServerReplication cmdlet.
         ${OsUpgradeVersion},
 
         [Parameter()]
@@ -115,38 +114,16 @@ function Start-AzMigrateServerMigration {
     )
     
     process {
-        # Honor -Scenario if it is provided.
         if ($PSBoundParameters.ContainsKey('Scenario')) {
-            if ($Scenario -eq "agentlessVMware") {
-                $scenario = "agentlessVMware"
-            }
-            else {
-                # AzStackHCI
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-            }
+            # Remove common optional parameter -Scenario
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                # Default to agentlessVMware
-                $scenario = "agentlessVMware"
-            }
-            else {
-                $scenario = $scenarioObject.Value
-                if ($scenario -ne $AzStackHCIInstanceTypes.AzStackHCI) {
-                    throw "Unknown Scenario '$($scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
-                }
-            }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Sceanrio')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio']
         }
 
-        # Remove common optional parameter -Scenario
-        $null = $PSBoundParameters.Remove('Scenario')
-
-        if ($scenario -eq "agentlessVMware") {
+        if ([string]::IsNullOrEmpty($Scenario) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            # 'agenlessVMware' scenario for migrating to Azure
             if ($TurnOffSourceServer.IsPresent) {
                 $PerformShutDown = "true"
             }
@@ -224,21 +201,9 @@ function Start-AzMigrateServerMigration {
                 throw "Either machine doesn't exist or provider/action isn't supported for this machine"
             }
         }
-        else {
-            # Get AzStackHCI Instance Type global variable
-            $azstackHCIInstanceTypeObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.InstanceType `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $azstackHCIInstanceTypeObject) {
-                throw "Please re-run Initialize-AzMigrateServerMigration before proceeding."
-            }
-            else {
-                $instanceType = $azstackHCIInstanceTypeObject.Value
-                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
-                    ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
-                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported. Please re-run Initialize-AzMigrateServerMigration before proceeding."
-                }
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            if ($PSBoundParameters.ContainsKey('OsUpgradeVersion')) {
+                Write-Information "The parameter -OsUpgradeVersion is not supported for scenario '$($Scenario)'. Therefore, it will be ignored."
             }
 
             $PerformShutDown = $TurnOffSourceServer.IsPresent
@@ -283,6 +248,9 @@ function Start-AzMigrateServerMigration {
             $null = $PSBoundParameters.Remove("VaultName")
             $null = $PSBoundParameters.Remove("Name")
 
+            # Get the instance type from the protected item
+            $instanceType = $protectedItem.Property.CustomProperty.InstanceType
+
             # Setup PlannedFailover deployment parameters
             $properties = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.PlannedFailoverModelProperties]::new()
             
@@ -314,6 +282,9 @@ function Start-AzMigrateServerMigration {
             $null = $PSBoundParameters.Add('Name', $jobName)
 
             return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }

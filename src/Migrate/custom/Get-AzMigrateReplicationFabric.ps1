@@ -23,9 +23,13 @@ Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IFabricMode
 https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratereplicationfabric
 #>
 function Get-AzMigrateReplicationFabric {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IFabricModel], ParameterSetName = "AzStackHCI")]
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IFabric], ParameterSetName = "agentlessVMware")]
-    [CmdletBinding(DefaultParameterSetName = 'List', PositionalBinding = $false)]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IFabricModel],
+        ParameterSetName = ('GetAzStackHCI', 'ListAzStackHCI'))]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IFabric],
+        ParameterSetName = ('GetAgentlessVMware', 'ListAgentlessVMware'))]
+    [CmdletBinding(DefaultParameterSetName = 'ListAzStackHCI', PositionalBinding = $false)]
     param(
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -33,14 +37,15 @@ function Get-AzMigrateReplicationFabric {
         # The name of the resource group where the recovery services vault is present.
         ${ResourceGroupName},
     
-        [Parameter(ParameterSetName = "agentlessVMware", Mandatory)]
-        [Alias('VaultName')]
+        [Parameter(ParameterSetName = 'GetAgentlessVMware', Mandatory)]
+        [Parameter(ParameterSetName = 'ListAgentlessVMware', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # The name of the recovery services vault.
         ${ResourceName},
     
-        [Parameter(ParameterSetName = 'Get', Mandatory)]
+        [Parameter(ParameterSetName = 'GetAzStackHCI', Mandatory)]
+        [Parameter(ParameterSetName = 'GetAgentlessVMware', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Fabric name.
@@ -58,21 +63,14 @@ function Get-AzMigrateReplicationFabric {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario.
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
         ${Scenario},
     
-        [Parameter(ParameterSetName = "agentlessVMware")]
-        [Parameter(ParameterSetName = 'Get')]
+        [Parameter(ParameterSetName = 'GetAgentlessVMware')]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Query')]
         [System.String]
         # OData filter options.
         ${Filter},
-
-        [Parameter(ParameterSetName = 'AzStackHCI')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Query')]
-        [System.String]
-        # Continuation token from the previous call.
-        ${ContinuationToken},
     
         [Parameter()]
         [Alias('AzureRMContext', 'AzureCredential')]
@@ -124,47 +122,38 @@ function Get-AzMigrateReplicationFabric {
     )
     
     process {
-        # Honor -Scenario if it is provided.
-        if ($PSBoundParameters.ContainsKey('Scenario')) {
-            if ($Scenario -eq "agentlessVMware") {
-                $scenario = "agentlessVMware"
-            }
-            else {
-                # AzStackHCI
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-            }
+        $parameterSet = $PSCmdlet.ParameterSetName
+        
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            # Remove common optional parameter -Scenario
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                # Default to agentlessVMware
-                $scenario = "agentlessVMware"
-            }
-            else {
-                $scenario = $scenarioObject.Value
-                if ($scenario -ne $AzStackHCIInstanceTypes.AzStackHCI) {
-                    throw "Unknown Scenario '$($scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
-                }
-            }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Sceanrio')){
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio']
         }
 
-        # Remove common optional parameter -Scenario
-        $null = $PSBoundParameters.Remove('Scenario')
-
-        if ($scenario -eq "agentlessVMware") {
-            $null = $PSBoundParameters.Remove('ContinuationToken')
+        if ([string]::IsNullOrEmpty($Scenario) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            # 'agenlessVMware' scenario for migrating to Azure
+            if ($parameterSet -match $AzMigrateSupportedScenarios.AzStackHCI) {
+                throw "Provided parameters cannot be used in the scenario '$($Scenario)'. Please check out examples for this command for correct usage and try again."
+            }
 
             return Az.Migrate.Internal\Get-AzMigrateReplicationFabricToAzureMigrate @PSBoundParameters
         }
-        else {
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            # 'AzStackHCI' scenario for migrating to AzStackHCI
+            if ($parameterSet -match $AzMigrateSupportedScenarios.agentlessVMware) {
+                throw "Provided parameters cannot be used in the scenario '$($Scenario)'. Please check out examples for this command for correct usage and try again."
+            }
+
             $null = $PSBoundParameters.Remove('ResourceName')
             $null = $PSBoundParameters.Remove('Filter')
-            
+
             return Get-AzMigrateFabric @PSBoundParameters
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }

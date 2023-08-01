@@ -15,9 +15,9 @@
 
 <#
 .Synopsis
-Initialises the infrastructure for the migrate project.
+Initializes the infrastructure for the migrate project.
 .Description
-The Initialize-AzMigrateReplicationInfrastructure cmdlet initialises the infrastructure for the migrate project.
+The Initialize-AzMigrateReplicationInfrastructure cmdlet initializes the infrastructure for the migrate project.
 .Link
 https://learn.microsoft.com/powershell/module/az.migrate/initialize-azmigratereplicationinfrastructure
 #>
@@ -45,7 +45,7 @@ function Initialize-AzMigrateReplicationInfrastructure {
         [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the server migration scenario.
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
         ${Scenario},
 
         [Parameter(ParameterSetName = "agentlessVMware", Mandatory)]
@@ -128,7 +128,8 @@ function Initialize-AzMigrateReplicationInfrastructure {
     )
 
     process {
-        if ($Scenario -eq "agentlessVMware") {
+        if ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware) {
+            # 'agenlessVMware' scenario for migrating to Azure
             Import-Module Az.Resources
             Import-Module Az.KeyVault
             Import-Module Az.Storage
@@ -601,28 +602,20 @@ public static int hashForArtifact(String artifact)
                     }
                 }
             }
+
+            # Add or update the default parameter value for $Scenario
+            $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio'] = $Scenario
+
             Write-Host "Finished successfully."
             return $true
         }
         else {
-            # AzStackHCI scenario
+            # 'AzStackHCI' scenario for migrating to AzStackHCI
             Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
             Import-Module Az.Resources
             Import-Module Az.Storage
 
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-                Set-Variable -Name $AzStackHCIGlobalVariableNames.Scenario -Value $scenario -Option constant -Scope global
-            }
-            else {
-                $scenario = $scenarioObject.Value
-            }
-            Write-Host "Running '$($scenario)' scenario to initialize AzMigrate Replication Infrastructure." 
+            Write-Host "Running '$($Scenario)' scenario to initialize Az.Migrate Replication Infrastructure." 
 
             $context = Get-AzContext
             # Get SubscriptionId
@@ -711,42 +704,37 @@ public static int hashForArtifact(String artifact)
                 throw "Server Discovery Solution missing Appliance Details. Invalid Solution."           
             }
 
-            # Get AzStackHCI InstanceType global variable
-            $azstackHCIInstanceTypeObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.InstanceType `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $azstackHCIInstanceTypeObject) {
-                $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
-                $vmwareSiteTypeRegex = "(?<=/Microsoft.OffAzure/VMwareSites/).*$"
-                if ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex) {
-                    $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
-                }
-                elseif ($appMap[$SourceApplianceName.ToLower()] -match $vmwareSiteTypeRegex) {
-                    $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
-                }
-                else {
-                    throw "Unknown VM site type encountered. Please verify the VM site type to be either for HyperV or VMware."
-                }
-                Set-Variable -Name $AzStackHCIGlobalVariableNames.InstanceType -Value $instanceType -Option constant -Scope global
+            $hyperVSiteTypeRegex = "(?<=/Microsoft.OffAzure/HyperVSites/).*$"
+            $vmwareSiteTypeRegex = "(?<=/Microsoft.OffAzure/VMwareSites/).*$"
+            if ($appMap[$SourceApplianceName.ToLower()] -match $hyperVSiteTypeRegex) {
+                $instanceType = $AzStackHCIInstanceTypes.HyperVToAzStackHCI
+            }
+            elseif ($appMap[$SourceApplianceName.ToLower()] -match $vmwareSiteTypeRegex) {
+                $instanceType = $AzStackHCIInstanceTypes.VMwareToAzStackHCI
             }
             else {
-                $instanceType = $azstackHCIInstanceTypeObject.Value
-                if (($instanceType -ne $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
-                    ($instanceType -ne $AzStackHCIInstanceTypes.VMwareToAzStackHCI)) {
-                    throw "Currently, for AzStackHCI scenario, only HyperV and VMware as the source is supported."
-                }
+                throw "Unknown VM site type encountered. Please verify the VM site type to be either for HyperV or VMware."
             }
             Write-Host "Running '$($instanceType)' instance."
 
             # Get Source and Target Fabrics
             $allFabrics = Get-AzMigrateFabric -ResourceGroupName $resourceGroup.ResourceGroupName
             foreach ($fabric in $allFabrics) {
-                if (($fabric.CustomPropertyInstanceType -ceq $FabricInstanceTypes.HyperVInstance)) {
-                    $sourceFabric = $fabric
+                if (($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
+                    ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.HyperVInstance)) {
+                        $sourceFabric = $fabric
                 }
-                elseif ($fabric.CustomPropertyInstanceType -ceq $FabricInstanceTypes.AzStackHCIInstance) {
+                elseif (($instanceType -eq $AzStackHCIInstanceTypes.VMwareToAzStackHCI) -and
+                    ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.VMwareInstance)) {
+                        $sourceFabric = $fabric
+                }
+                elseif ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.AzStackHCIInstance) {
                     $targetFabric = $fabric
+                }
+
+                if (($null -ne $sourceFabric) -and ($null -ne $targetFabric))
+                {
+                    break
                 }
             }
 
@@ -800,7 +788,7 @@ public static int hashForArtifact(String artifact)
                 }
             }
             else {
-                throw "No Data Replication Service Solution found."
+                throw "No Data Replication Service Solution found. Please verify your appliance setup."
             }
 
             # Put Policy
@@ -1130,12 +1118,15 @@ public static int hashForArtifact(String artifact)
             }
             Write-Host "*Selected Replication Extension: '$($replicationExtension.Name)'."
 
+            # Add or update the default parameter value for $Scenario
+            $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio'] = $Scenario
+
             return @{
                 ReplicationVaultName     = $replicationVaultName;
                 CacheStorageAccountName  = $cacheStorageAccount.StorageAccountName;
                 PolicyName               = $policy.Name;
                 ReplicationExtensionName = $replicationExtension.Name;
             }
-        }        
+        }
     }
 }
