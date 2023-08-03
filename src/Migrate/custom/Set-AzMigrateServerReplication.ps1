@@ -24,12 +24,6 @@ https://learn.microsoft.com/powershell/module/az.migrate/set-azmigrateserverrepl
 function Set-AzMigrateServerReplication {
     [CmdletBinding(DefaultParameterSetName = 'AgentlessVMware_ByID', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'AzStackHCI_ByID', Mandatory, Position = 0)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObject', Mandatory, Position = 0)]
-        [Switch]
-        # Specifies the migration target is AzStackHCI.
-        ${AzStackHCI},
-        
         [Parameter(ParameterSetName = 'AgentlessVMware_ByID', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByID', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -43,6 +37,14 @@ function Set-AzMigrateServerReplication {
         [System.Object]
         # Specifies the replicating server for which the properties need to be updated. The server object can be retrieved using the Get-AzMigrateServerReplication cmdlet.
         ${InputObject},
+        
+        [Parameter()]
+        [ValidateSet("AzStackHCI", "agentlessVMware")]
+        [ArgumentCompleter( { "AzStackHCI", "agentlessVMware" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario.
+        ${Scenario},
 
         [Parameter()]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -284,17 +286,15 @@ function Set-AzMigrateServerReplication {
     )
     
     process {
-        if ($PSBoundParameters.ContainsKey('AzStackHCI')) {
-            $scenario = "AzStackHCI"
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            $scenario = "agentlessVMware"
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
         }
 
-        # Remove common optional parameter -AzStackHCI
-        $null = $PSBoundParameters.Remove('AzStackHCI')
-
-        if ($scenario -eq "agentlessVMware") {
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
             $HasTargetVMName = $PSBoundParameters.ContainsKey('TargetVMName')
             $HasTargetDiskName = $PSBoundParameters.ContainsKey('TargetDiskName')
             $HasTargetVmSize = $PSBoundParameters.ContainsKey('TargetVMSize')
@@ -878,7 +878,7 @@ function Set-AzMigrateServerReplication {
                 throw "Either machine doesn't exist or provider/action isn't supported for this machine"
             }
         }
-        else {
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
             $HasTargetVMName = $PSBoundParameters.ContainsKey('TargetVMName')
             $HasTargetVMCPUCores = $PSBoundParameters.ContainsKey('TargetVMCPUCores')
             $HasTargetVirtualSwitch = $PSBoundParameters.ContainsKey('TargetVirtualSwitch')
@@ -966,6 +966,9 @@ function Set-AzMigrateServerReplication {
             $null = $PSBoundParameters.Add('Name', $output.Name)
 
             return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters;
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }   

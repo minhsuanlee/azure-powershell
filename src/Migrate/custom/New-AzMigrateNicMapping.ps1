@@ -22,14 +22,17 @@ The New-AzMigrateNicMapping cmdlet creates a mapping of the source NIC attached 
 https://learn.microsoft.com/powershell/module/az.migrate/new-azmigratenicmapping
 #>
 function New-AzMigrateNicMapping {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IHyperVToAzStackHCINicInput], ParameterSetName = "AzStackHCI")]
+    [OutputType([System.Object], ParameterSetName = "AzStackHCI")]
     [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IVMwareCbtNicInput], ParameterSetName = "agentlessVMware")]
     [CmdletBinding(DefaultParameterSetName = 'agentlessVMware', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'AzStackHCI', Mandatory, Position = 0)]
-        [Switch]
-        # Specifies the migration target is AzStackHCI.
-        ${AzStackHCI},
+        [Parameter()]
+        [ValidateSet("agentlessVMware", "AzStackHCI")]
+        [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario.
+        ${Scenario},
 
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -83,17 +86,15 @@ function New-AzMigrateNicMapping {
     )
     
     process {
-        if ($PSBoundParameters.ContainsKey('AzStackHCI')) {
-            $scenario = "AzStackHCI"
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            $scenario = "agentlessVMware"
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
         }
 
-        # Remove common optional parameter -AzStackHCI
-        $null = $PSBoundParameters.Remove('AzStackHCI')
-
-        if ($scenario -eq "agentlessVMware") {
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
             $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.VMwareCbtNicInput]::new()
             $NicObject.NicId = $NicID
             if ($PSBoundParameters.ContainsKey('TargetNicSelectionType')) {
@@ -148,15 +149,18 @@ function New-AzMigrateNicMapping {
 
             return $NicObject
         }
-        else {
-            $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IHyperVToAzStackHCINicInput]::new()
-            $NicObject.NicId = $NicID
-            $NicObject.TargetNetworkId = $TargetNetworkId
-            $NicObject.TestNetworkId = $TargetNetworkId
-            $NicObject.SelectionTypeForFailover = "SelectedByUser"
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            $NicObject = @{
+                NicId = $NicID;
+                TargetNetworkId = $TargetNetworkId;
+                TestNetworkId = $TargetNetworkId;
+                SelectionTypeForFailover = "SelectedByUser";
+            }
 
             return $NicObject
         }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
+        }
     }
-
 }   

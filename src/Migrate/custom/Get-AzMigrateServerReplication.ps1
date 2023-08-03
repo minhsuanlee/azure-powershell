@@ -22,7 +22,7 @@ The Get-AzMigrateServerReplication cmdlet retrieves the object for the replicati
 https://learn.microsoft.com/powershell/module/az.migrate/get-azmigrateserverreplication
 #>
 function Get-AzMigrateServerReplication {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem])]
+    [OutputType([System.Object])]
     [CmdletBinding(DefaultParameterSetName = 'ListByName', PositionalBinding = $false)]
     param(
         [Parameter(ParameterSetName = 'GetByItemID', Mandatory)]
@@ -61,7 +61,7 @@ function Get-AzMigrateServerReplication {
 
         [Parameter(ParameterSetName = 'GetByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]
+        [System.Object]
         # Specifies the machine object of the replicating server.
         ${InputObject},
 
@@ -154,36 +154,6 @@ function Get-AzMigrateServerReplication {
     
     process {
         Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
-        # Honor -Scenario if it is provided.
-        if ($PSBoundParameters.ContainsKey('Scenario')) {
-            if ($Scenario -eq "agentlessVMware") {
-                $scenario = "agentlessVMware"
-            }
-            else {
-                # AzStackHCI
-                $scenario = $AzStackHCIInstanceTypes.AzStackHCI
-            }
-        }
-        else {
-            # Get Scenario global variable
-            $scenarioObject = Get-Variable `
-                -Name $AzStackHCIGlobalVariableNames.Scenario `
-                -ErrorVariable notPresent `
-                -ErrorAction SilentlyContinue
-            if ($null -eq $scenarioObject) {
-                # Default to agentlessVMware
-                $scenario = "agentlessVMware"
-            }
-            else {
-                $scenario = $scenarioObject.Value
-                if ($scenario -ne $AzStackHCIInstanceTypes.AzStackHCI) {
-                    throw "Unknown Scenario '$($scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
-                }
-            }
-        }
-
-        # Remove common optional parameter -Scenario
-        $null = $PSBoundParameters.Remove('Scenario')
 
         $parameterSet = $PSCmdlet.ParameterSetName
         $null = $PSBoundParameters.Remove('TargetObjectID')
@@ -198,8 +168,15 @@ function Get-AzMigrateServerReplication {
         $null = $PSBoundParameters.Remove('Filter')
         $null = $PSBoundParameters.Remove('SkipToken')
         $null = $PSBoundParameters.Remove('MachineName')
+
+        if ($PSBoundParameters.ContainsKey('Scenario')) {
+            $null = $PSBoundParameters.Remove('Scenario')
+        }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
+        }
            
-        if ($scenario -eq "agentlessVMware") {
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
             if ($parameterSet -eq "GetBySDSID") {
                 $MachineIdArray = $DiscoveredMachineId.Split("/")
                 $SiteType = $MachineIdArray[7]
@@ -317,7 +294,7 @@ function Get-AzMigrateServerReplication {
                 return Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
             }
         }
-        else {
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
             if ($parameterSet -eq "GetBySDSID") {
                 $MachineIdArray = $DiscoveredMachineId.Split("/")
                 $SiteType = $MachineIdArray[7]
@@ -402,6 +379,9 @@ function Get-AzMigrateServerReplication {
         
                 return Get-AzMigrateProtectedItem @PSBoundParameters
             }
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }

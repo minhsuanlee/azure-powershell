@@ -22,14 +22,17 @@ The New-AzMigrateDiskMapping cmdlet creates a mapping of the source disk attache
 https://learn.microsoft.com/powershell/module/az.migrate/new-azmigratediskmapping
 #>
 function New-AzMigrateDiskMapping {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IHyperVToAzStackHCIDiskInput], ParameterSetName = "AzStackHCI")]
+    [OutputType([System.Object], ParameterSetName = "AzStackHCI")]
     [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IVMwareCbtDiskInput], ParameterSetName = "agentlessVMware")]
     [CmdletBinding(DefaultParameterSetName = 'agentlessVMware', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'AzStackHCI', Mandatory, Position = 0)]
-        [Switch]
-        # Specifies the migration target is AzStackHCI.
-        ${AzStackHCI},
+        [Parameter()]
+        [ValidateSet("agentlessVMware", "AzStackHCI")]
+        [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario.
+        ${Scenario},
 
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
@@ -81,17 +84,20 @@ function New-AzMigrateDiskMapping {
     )
     
     process {
-        if ($PSBoundParameters.ContainsKey('AzStackHCI')) {
-            $scenario = "AzStackHCI"
+        $parameterSet = $PSCmdlet.ParameterSetName
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            $null = $PSBoundParameters.Remove('Scenario')
         }
-        else {
-            $scenario = "agentlessVMware"
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
         }
+        
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            if ($parameterSet -inotmatch "agentlessVMware") {
+                throw "DiskType is required for Scenario '$($Scenario)'."
+            }
 
-        # Remove common optional parameter -AzStackHCI
-        $null = $PSBoundParameters.Remove('AzStackHCI')
-
-        if ($scenario -eq "agentlessVMware") {
             $DiskObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.VMwareCbtDiskInput]::new()
             $DiskObject.DiskId = $DiskID
 
@@ -112,20 +118,28 @@ function New-AzMigrateDiskMapping {
             }
             return $DiskObject 
         }
-        else {
-            $DiskObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.HyperVToAzStackHCIDiskInput]::new()
-            $DiskObject.DiskId = $DiskID
-            $DiskObject.IsDynamic = $IsDynamic
-            $DiskObject.DiskSizeGB = $Size
-            $DiskObject.DiskFileFormat = $Format
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            if ($parameterSet -inotmatch "AzStackHCI") {
+                throw "IsDynamic is required for Scenario '$($Scenario)'."
+            }
 
             $validBooleanSpellings = @{ 
                 true  = "true";
                 false = "false"
             }
-            $DiskObject.IsOSDisk = $validBooleanSpellings[$IsOSDisk]
+
+            $DiskObject = @{
+                DiskId = $DiskID
+                DiskSizeGB = $Size
+                DiskFileFormat = $Format
+                IsDynamic = $IsDynamic
+                IsOSDisk = $validBooleanSpellings[$IsOSDisk]
+            }
 
             return $DiskObject 
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }   

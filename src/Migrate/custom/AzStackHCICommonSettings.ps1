@@ -57,3 +57,8 @@ $DynamicMemoryConfig = @{
     MinimumMemoryInMegaByte = 1024;
     TargetMemoryBufferPercentage = 20;
 }
+
+$AzMigrateSupportedScenarios = @{
+    agentlessVMware = "agentlessVMware";
+    AzStackHCI      = "AzStackHCI";
+}

@@ -22,16 +22,9 @@ The New-AzMigrateServerReplication cmdlet starts the replication for a particula
 https://learn.microsoft.com/powershell/module/az.migrate/new-azmigrateserverreplication
 #>
 function New-AzMigrateServerReplication {
+    [OutputType([System.Object])]
     [CmdletBinding(DefaultParameterSetName = 'AgentlessVMware_ByIdDefaultUser', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'AzStackHCI_ByIdDefaultUser', Mandatory, Position = 0)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser', Mandatory, Position = 0)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectDefaultUser', Mandatory, Position = 0)]
-        [Parameter(ParameterSetName = 'AzStackHCI_ByInputObjectPowerUser', Mandatory, Position = 0)]
-        [Switch]
-        # Specifies the migration target is AzStackHCI.
-        ${AzStackHCI},
-
         [Parameter(ParameterSetName = 'AgentlessVMware_ByIdDefaultUser', Mandatory)]
         [Parameter(ParameterSetName = 'AgentlessVMware_ByIdPowerUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdDefaultUser', Mandatory)]
@@ -49,6 +42,14 @@ function New-AzMigrateServerReplication {
         [System.Object]
         # Specifies the discovered server to be migrated. The server object can be retrieved using the Get-AzMigrateServer cmdlet.
         ${InputObject},
+
+        [Parameter()]
+        [ValidateSet("AzStackHCI", "agentlessVMware")]
+        [ArgumentCompleter( { "AzStackHCI", "agentlessVMware" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario.
+        ${Scenario},
 
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdDefaultUser', Mandatory)]
         [Parameter(ParameterSetName = 'AzStackHCI_ByIdPowerUser', Mandatory)]
@@ -360,17 +361,23 @@ function New-AzMigrateServerReplication {
     )
     
     process {
-        if ($PSBoundParameters.ContainsKey('AzStackHCI')) {
-            $scenario = "AzStackHCI"
-        }
-        else {
-            $scenario = "agentlessVMware"
-        }
-        # Remove common optional parameter -AzStackHCI
-        $null = $PSBoundParameters.Remove('AzStackHCI')
+        Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
 
-        if ($scenario -eq "agentlessVMware") {
+        if ($PSBoundParameters.ContainsKey('Scenario'))
+        {
+            $null = $PSBoundParameters.Remove('Scenario')
+        }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
+        }
+
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
             $parameterSet = $PSCmdlet.ParameterSetName
+
+            if ($parameterSet -inotmatch "agentlessVMware") {
+                throw "LicenseType is required for Scenario '$($Scenario)'."
+            }
+
             $HasRunAsAccountId = $PSBoundParameters.ContainsKey('VMWarerunasaccountID')
             $HasTargetAVSet = $PSBoundParameters.ContainsKey('TargetAvailabilitySet')
             $HasTargetAVZone = $PSBoundParameters.ContainsKey('TargetAvailabilityZone')
@@ -843,10 +850,13 @@ public static int hashForArtifact(String artifact)
             
             return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
         }
-        else {
-            Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
-
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
             $parameterSet = $PSCmdlet.ParameterSetName
+
+            if ($parameterSet -inotmatch "AzStackHCI") {
+                throw "TargetStoragePathId is required for Scenario '$($Scenario)'."
+            }
+
             $HasTargetVMCPUCores = $PSBoundParameters.ContainsKey('TargetVMCPUCores')
             $HasIsDynamicMemoryEnabled = $PSBoundParameters.ContainsKey('IsDynamicMemoryEnabled')
             $HasTargetVMRam = $PSBoundParameters.ContainsKey('TargetVMRam')
@@ -1098,7 +1108,7 @@ public static int hashForArtifact(String artifact)
             }
             else {
                 # Validate OSDisk is set.
-                $osDisk = $InputObject.Disk | Where-Object { $_.IsOSDisk -eq $True }
+                $osDisk = $DiskToInclude | Where-Object { $_.IsOSDisk -eq $True }
                 if (($null -eq $osDisk) -or ($osDisk.length -ne 1)) {
                     throw "One disk must be set as OS Disk."
                 }
@@ -1111,10 +1121,10 @@ public static int hashForArtifact(String artifact)
                         throw "The disk uuid '$($disk.DiskId)' is not found."
                     }
 
-                    if ($uniqueDisks.Contains($disk.DiskId)) {
+                    if (($null -ne $uniqueDisks) -and ($uniqueDisks.Contains($disk.DiskId))) {
                         throw "The disk uuid '$($disk.DiskId)' is already taken."
                     }
-                    $res = $uniqueDisks.Add($disk.DiskId)
+                    $uniqueDisks += $disk.DiskId
                 }
                 # Validate no duplicates in the list
                 foreach ($nic in $NicToInclude)
@@ -1124,10 +1134,11 @@ public static int hashForArtifact(String artifact)
                         throw "The Nic id '$($nic.NicId)' is not found."
                     }
 
-                    if ($uniqueNics.Contains($nic.NicId)) {
+                    if (($null -ne $uniqueNics) -and ($uniqueNics.Contains($nic.NicId))) {
                         throw "The Nic id '$($nic.NicId)' is already taken."
                     }
-                    $res = $uniqueNics.Add($nic.NicId)
+                    
+                    $uniqueNics += $nic.NicId
                 }
             }
 
@@ -1154,5 +1165,8 @@ public static int hashForArtifact(String artifact)
 
             return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters;
         } 
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
+        }
     }
 }
