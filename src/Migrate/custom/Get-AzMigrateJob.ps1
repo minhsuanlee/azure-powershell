@@ -22,13 +22,15 @@ The Get-AzMigrateJob cmdlet retrives the status of an Azure Migrate job.
 https://learn.microsoft.com/powershell/module/az.migrate/get-azmigratejob
 #>
 function Get-AzMigrateJob {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob])]
+    [OutputType(
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob],
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel])]
     [CmdletBinding(DefaultParameterSetName = 'ListByName', PositionalBinding = $false)]
     param(
         [Parameter(ParameterSetName = 'GetById', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
-        # Specifies the job id for which the details needs to be retrieved.
+        # Specifies the full job id for which the details needs to be retrieved.
         ${JobID},
 
         [Parameter(ParameterSetName = 'GetByName', Mandatory)]
@@ -53,7 +55,7 @@ function Get-AzMigrateJob {
 
         [Parameter(ParameterSetName = 'GetByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob]
+        [System.Object]
         # Specifies the job object of the replicating server.
         ${InputObject},
 
@@ -82,6 +84,14 @@ function Get-AzMigrateJob {
         [System.String]
         # Azure Subscription ID.
         ${SubscriptionId},
+
+        [Parameter()]
+        [ValidateSet("agentlessVMware", "AzStackHCI")]
+        [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario. Highly recommended to include for 'AzStackHCI' scenario.
+        ${Scenario},
 
         [Parameter()]
         [Alias('AzureRMContext', 'AzureCredential')]
@@ -131,65 +141,144 @@ function Get-AzMigrateJob {
         ${ProxyUseDefaultCredentials}
     )
     
-    process {   
-        $parameterSet = $PSCmdlet.ParameterSetName
-        $null = $PSBoundParameters.Remove('JobID')
-        $null = $PSBoundParameters.Remove('ResourceGroupName')
-        $null = $PSBoundParameters.Remove('ProjectName')
-        $null = $PSBoundParameters.Remove('JobName')
-        $null = $PSBoundParameters.Remove('InputObject')
-        $null = $PSBoundParameters.Remove('InputServerObject')
-        $null = $PSBoundParameters.Remove('ResourceGroupID')
-        $null = $PSBoundParameters.Remove('ProjectID')
-        $HasFilter = $PSBoundParameters.ContainsKey('Filter')
-        $null = $PSBoundParameters.Remove('Filter')
+    process {
+        if ($PSBoundParameters.ContainsKey('Scenario')) {
+            # Remove common optional parameter -Scenario
+            $null = $PSBoundParameters.Remove('Scenario')
+        }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Sceanrio')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Sceanrio']
+        }
+        
+        if ([string]::IsNullOrEmpty($Scenario) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            # 'agenlessVMware' scenario for migrating to Azure
+            $parameterSet = $PSCmdlet.ParameterSetName
+            $null = $PSBoundParameters.Remove('JobID')
+            $null = $PSBoundParameters.Remove('ResourceGroupName')
+            $null = $PSBoundParameters.Remove('ProjectName')
+            $null = $PSBoundParameters.Remove('JobName')
+            $null = $PSBoundParameters.Remove('InputObject')
+            $null = $PSBoundParameters.Remove('InputServerObject')
+            $null = $PSBoundParameters.Remove('ResourceGroupID')
+            $null = $PSBoundParameters.Remove('ProjectID')
+            $HasFilter = $PSBoundParameters.ContainsKey('Filter')
+            $null = $PSBoundParameters.Remove('Filter')
 
-       
-        if (($parameterSet -match 'Name') -or ($parameterSet -eq 'ListById')) {
-            if ($parameterSet -eq 'ListById') {
-                $ProjectName = $ProjectID.Split("/")[8]
-                $ResourceGroupName = $ResourceGroupID.Split("/")[4]
-            }
-            $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
-            $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
-            $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
-                
-            $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
-            if ($solution -and ($solution.Count -ge 1)) {
-                $ResourceName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+        
+            if (($parameterSet -match 'Name') -or ($parameterSet -eq 'ListById')) {
+                if ($parameterSet -eq 'ListById') {
+                    $ProjectName = $ProjectID.Split("/")[8]
+                    $ResourceGroupName = $ResourceGroupID.Split("/")[4]
+                }
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                    
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $ResourceName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+                }
+                else {
+                    throw "Solution not found."
+                }
+                $null = $PSBoundParameters.Remove("Name")
+                $null = $PSBoundParameters.Remove("MigrateProjectName")
+                $null = $PSBoundParameters.Remove("ResourceGroupName")
             }
             else {
-                throw "Solution not found."
+                if ($parameterSet -eq 'GetByInputObject') {
+                    if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob]) {
+                        throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IJob]. Please verify the Scenario that you are in."
+                    }
+
+                    $JobID = $InputObject.Id
+                }
+                $JobIdArray = $JobID.split('/')
+                $JobName = $JobIdArray[10]
+                $ResourceName = $JobIdArray[8]
+                $ResourceGroupName = $JobIdArray[4]
             }
-            $null = $PSBoundParameters.Remove("Name")
-            $null = $PSBoundParameters.Remove("MigrateProjectName")
-            $null = $PSBoundParameters.Remove("ResourceGroupName")
-        }
-        else {
-            if ($parameterSet -eq 'GetByInputObject') {
-                $JobID = $InputObject.Id
+                
+            if ($parameterSet -match 'Get') {
+                $null = $PSBoundParameters.Add('JobName', $JobName)
+                $null = $PSBoundParameters.Add('ResourceName', $ResourceName)
+                $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
+                
+                return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
             }
-            $JobIdArray = $JobID.split('/')
-            $JobName = $JobIdArray[10]
-            $ResourceName = $JobIdArray[8]
-            $ResourceGroupName = $JobIdArray[4]
+            else {
+                $null = $PSBoundParameters.Add('ResourceName', $ResourceName)
+                $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
+                if ($HasFilter) {
+                    $null = $PSBoundParameters.Add('Filter', $Filter)
+                }
+
+                return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
+            }
         }
-               
-        if ($parameterSet -match 'Get') {
-            $null = $PSBoundParameters.Add('JobName', $JobName)
-            $null = $PSBoundParameters.Add('ResourceName', $ResourceName)
-            $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            # 'AzStackHCI' scenario for migrating to AzStackHCI
+            $parameterSet = $PSCmdlet.ParameterSetName
+            $null = $PSBoundParameters.Remove('JobID')
+            $null = $PSBoundParameters.Remove('ResourceGroupName')
+            $null = $PSBoundParameters.Remove('ProjectName')
+            $null = $PSBoundParameters.Remove('JobName')
+            $null = $PSBoundParameters.Remove('InputObject')
+            $null = $PSBoundParameters.Remove('ResourceGroupID')
+            $null = $PSBoundParameters.Remove('ProjectID')
+            $HasFilter = $PSBoundParameters.ContainsKey('Filter')
+            $null = $PSBoundParameters.Remove('Filter')
+
+            if (($parameterSet -match 'Name') -or ($parameterSet -eq 'ListById')) {
+                if ($parameterSet -eq 'ListById') {
+                    $ProjectName = $ProjectID.Split("/")[8]
+                    $ResourceGroupName = $ResourceGroupID.Split("/")[4]
+                }
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration_DataReplication")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                    
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $vaultName = $solution.DetailExtendedDetail["vaultId"].Split("/")[8]
+                }
+                else {
+                    throw "Solution not found."
+                }
+
+                $null = $PSBoundParameters.Remove("ResourceGroupName")
+                $null = $PSBoundParameters.Remove("Name")
+                $null = $PSBoundParameters.Remove("MigrateProjectName")
+            }
+            else {
+                if ($parameterSet -eq 'GetByInputObject') {
+                    if ($InputObject -isnot [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]) {
+                        throw "-InputObject must be of type [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.IWorkflowModel]. Please verify the Scenario that you are in."
+                    }
+                    
+                    $JobID = $InputObject.Id
+                }
+                $jobIdArray = $JobID.split('/')
+                $ResourceGroupName = $jobIdArray[4]
+                $vaultName = $jobIdArray[8]
+                $JobName = $jobIdArray[10]
+            }
             
-            return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
-        }
-        else {
-            $null = $PSBoundParameters.Add('ResourceName', $ResourceName)
             $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
-            if ($HasFilter) {
-                $null = $PSBoundParameters.Add('Filter', $Filter)
+            $null = $PSBoundParameters.Add('VaultName', $vaultName)
+            if ($parameterSet -match 'Get') {
+                $null = $PSBoundParameters.Add('Name', $JobName)
+            }
+            else {
+                if ($HasFilter) {
+                    $null = $PSBoundParameters.Add('Filter', $Filter)
+                }
             }
 
-            return Az.Migrate.internal\Get-AzMigrateReplicationJob @PSBoundParameters
+            return  Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
-}   
+}
