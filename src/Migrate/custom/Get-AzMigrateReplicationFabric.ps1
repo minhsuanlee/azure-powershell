@@ -150,7 +150,7 @@ function Get-AzMigrateReplicationFabric {
             $null = $PSBoundParameters.Remove('ResourceName')
             $null = $PSBoundParameters.Remove('Filter')
 
-            return Get-AzMigrateFabric @PSBoundParameters
+            return Az.Migrate.Internal\Get-AzMigrateFabric @PSBoundParameters
         }
         else {
             throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."

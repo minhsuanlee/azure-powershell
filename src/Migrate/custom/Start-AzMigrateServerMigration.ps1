@@ -233,7 +233,7 @@ function Start-AzMigrateServerMigration {
             $null = $PSBoundParameters.Add("VaultName", $vaultName)
             $null = $PSBoundParameters.Add("Name", $protectedItemName)
 
-            $protectedItem = Az.Migrate\Get-AzMigrateProtectedItem @PSBoundParameters
+            $protectedItem = Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
             if ($null -eq $protectedItem) {
                 throw "The replicating server doesn't exist. Please check the input and try again."
             }
@@ -281,7 +281,7 @@ function Start-AzMigrateServerMigration {
             $null = $PSBoundParameters.Remove('Property')
             $null = $PSBoundParameters.Add('Name', $jobName)
 
-            return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+            return Az.Migrate.Internal\Get-AzMigrateWorkflow @PSBoundParameters
         }
         else {
             throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."

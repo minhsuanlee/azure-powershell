@@ -54,7 +54,7 @@ input-file:
   - $(repo)/specification/migrate/resource-manager/Microsoft.OffAzure/stable/2020-01-01/migrate.json
   - $(repo)/specification/migrateprojects/resource-manager/Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
   - $(repo)/specification/recoveryservicessiterecovery/resource-manager/Microsoft.RecoveryServices/stable/2023-01-01/service.json
-  - $(this-folder)/../swagger.json
+  - https://github.com/Azure/azure-rest-api-specs/blob/57eb648f4042e369227e48ceec890ec6b8274e9e/specification/recoveryservicesdatareplication/resource-manager/Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
 
 module-version: 1.0.1
 title: Migrate 
@@ -102,9 +102,17 @@ directive:
     - ProtectionContainerMappingProviderSpecificDetails
     - MigrateProjectProperties
     - FabricProperties
+    - FabricModelProperties
+    - FabricModelCustomProperties
+    - AzStackHCIFabricModelCustomProperties
+    - HyperVMigrateFabricModelCustomProperties
+    - VMwareMigrateFabricModelCustomProperties
     - PolicyModelProperties
     - ReplicationExtensionModelProperties
     - ProtectedItemModelProperties
+    - ProtectedItemModelCustomProperties
+    - HyperVToAzStackHCIProtectedItemModelCustomProperties
+    - VMwareToAzStackHCIProtectedItemModelCustomProperties
     - PlannedFailoverModelProperties
   # Remove variants not in scope
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
@@ -295,6 +303,56 @@ directive:
       verb: New
       subject: ^ReplicationVaultSetting|^SupportedOperatingSystem|^ReplicationProtectionIntent
     remove: true
+  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
+    where:
+      verb: Get
+      subject: ^HyperV(Cluster|Host|Job|OperationsStatus)$
+    remove: true
+  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
+    where:
+      verb: New|Remove|Update
+      subject: ^HyperV
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Test|Invoke
+      subject: NameAvailability$|DeploymentPreflight
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Get|New
+      subject: ^EmailConfiguration
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Get
+      subject: ^(Dra|ProtectedItem|Vault|Workflow)OperationStatus$
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Get
+      subject: ^FabricOperationsStatus$
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: New
+      subject: ^(Dra|Vault)
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Remove
+      subject: ^(Dra|Policy|ReplicationExtension|Vault)
+    remove: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Update
+      subject: ^Vault
+    remove: true
+  - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
+    where:
+      verb: Invoke
+      subject: ^PlannedReplication
+    remove: true
   # Rename cmdlets used by custom
   - from: Microsoft.RecoveryServices/stable/2023-01-01/service.json
     where:
@@ -376,10 +434,6 @@ directive:
     hide: true
   - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
     where:
-      subject: ^HyperV
-    hide: true
-  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
-    where:
       verb: Get$|List$
       subject: Machine$
     hide: true
@@ -395,6 +449,11 @@ directive:
   - where:
       verb: New$
       variant: ^CreateViaIdentity
+    hide: true
+  - from: Microsoft.DataReplication/preview/2021-02-16-preview/recoveryservicesdatareplication.json
+    where:
+      verb: Get$|Invoke$|New$|Remove$|Test$|Update$
+      subject: ^Dra|^Fabric|^Policy|^EmailConfiguration|^ProtectedItem|^ReplicationExtension|^Vault|^Workflow
     hide: true
   - where:
       verb: New$|Set$|Update$

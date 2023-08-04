@@ -32,10 +32,27 @@ $ApiVersions = @{
     StorageAccount       = "2021-09-01";
     HyperVSites          = "2020-01-01";
     ProtectedItem        = "2021-02-16-preview";
+    AzStackHCI           = "2021-09-01-preview";
 }
 
 # Role definition GUIDs for storage account creation
 $RoleDefinitionIds = @{
     ContributorId                = "b24988ac-6180-42a0-ab88-20f7382dd24c";
     StorageBlobDataContributorId = "ba92f5b4-2d11-453d-a403-e96b0029c9fe";
+}
+
+$RunAsAccountCredentialTypes = @{
+    HyperVFabric     = "HyperVFabric";
+    VMwareFabric     = "VMwareFabric";
+    DomainCredential = "DomainCredential";
+}
+
+$SiteTypes = @{
+    HyperVSites = "HyperVSites";
+    VMwareSites = "VMwareSites";
+}
+
+$DynamicMemoryConfig = @{
+    MinimumMemoryInMegaByte = 1024;
+    TargetMemoryBufferPercentage = 20;
 }

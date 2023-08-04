@@ -73,7 +73,7 @@ function Get-AzMigrateDiscoveredServer {
         $parameterSet = $PSCmdlet.ParameterSetName
         
         $discoverySolutionName = "Servers-Discovery-ServerDiscovery"
-        $discoverySolution = Get-AzMigrateSolution -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -MigrateProjectName $ProjectName -Name $discoverySolutionName
+        $discoverySolution = Az.Migrate\Get-AzMigrateSolution -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -MigrateProjectName $ProjectName -Name $discoverySolutionName
         if ($discoverySolution.Name -ne $discoverySolutionName) {
             throw "Server Discovery Solution not found."
         }
@@ -116,14 +116,14 @@ function Get-AzMigrateDiscoveredServer {
                             $siteNameTmp = $Matches[0]
                             $siteFound = 1
                             if ($parameterSet -eq 'GetInSite') {
-                                return Get-AzMigrateMachine `
+                                return Az.Migrate.Internal\Get-AzMigrateMachine `
                                     -Name $Name `
                                     -ResourceGroupName $ResourceGroupName `
                                     -SiteName $siteNameTmp `
                                     -SubscriptionId $SubscriptionId
                             }
                             elseif ($parameterSet -eq 'ListInSite') {
-                                $siteMachines = Get-AzMigrateMachine `
+                                $siteMachines = Az.Migrate.Internal\Get-AzMigrateMachine `
                                     -ResourceGroupName $ResourceGroupName `
                                     -SiteName $siteNameTmp `
                                     -SubscriptionId $SubscriptionId
@@ -142,14 +142,14 @@ function Get-AzMigrateDiscoveredServer {
                         $siteNameTmp = $Matches[0]
                         $siteFound = 1
                         if ($parameterSet -eq 'GetInSite') {
-                            return Get-AzMigrateHyperVMachine `
+                            return Az.Migrate.Internal\Get-AzMigrateHyperVMachine `
                                 -MachineName $Name `
                                 -ResourceGroupName $ResourceGroupName `
                                 -SiteName $siteNameTmp `
                                 -SubscriptionId $SubscriptionId
                         }
                         elseif ($parameterSet -eq 'ListInSite') {
-                            $siteMachines = Get-AzMigrateHyperVMachine `
+                            $siteMachines = Az.Migrate.Internal\Get-AzMigrateHyperVMachine `
                                 -ResourceGroupName $ResourceGroupName `
                                 -SiteName $siteNameTmp `
                                 -SubscriptionId $SubscriptionId
@@ -180,14 +180,14 @@ function Get-AzMigrateDiscoveredServer {
                     $siteArmId = $kvp.Value
                     if ($siteArmId -match $vmwareSiteRegex) {
                         $siteNameTmp = $Matches[0]
-                        $siteMachines = Get-AzMigrateMachine `
+                        $siteMachines = Az.Migrate.Internal\Get-AzMigrateMachine `
                             -ResourceGroupName $ResourceGroupName `
                             -SiteName $siteNameTmp `
                             -SubscriptionId $SubscriptionId  
                     }
                     elseif ($siteArmId -match $hyperVSiteRegex) {
                         $siteNameTmp = $Matches[0]
-                        $siteMachines = Get-AzMigrateHyperVMachine `
+                        $siteMachines = Az.Migrate.Internal\Get-AzMigrateHyperVMachine `
                             -ResourceGroupName $ResourceGroupName `
                             -SiteName $siteNameTmp `
                             -SubscriptionId $SubscriptionId
@@ -211,7 +211,7 @@ function Get-AzMigrateDiscoveredServer {
                     $siteArmId = $kvp.Value
                     if ($siteArmId -match $vmwareSiteRegex) {
                         $siteNameTmp = $Matches[0]
-                        $siteMachine = Get-AzMigrateMachine `
+                        $siteMachine = Az.Migrate.Internal\Get-AzMigrateMachine `
                             -Name $Name `
                             -ResourceGroupName $ResourceGroupName `
                             -SiteName $siteNameTmp `
@@ -225,7 +225,7 @@ function Get-AzMigrateDiscoveredServer {
                     }
                     elseif ($siteArmId -match $hyperVSiteRegex) {
                         $siteNameTmp = $Matches[0]
-                        $siteMachine = Get-AzMigrateHyperVMachine `
+                        $siteMachine = Az.Migrate.Internal\Get-AzMigrateHyperVMachine `
                             -MachineName $Name `
                             -ResourceGroupName $ResourceGroupName `
                             -SiteName $siteNameTmp `

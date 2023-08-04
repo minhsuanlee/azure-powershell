@@ -275,7 +275,7 @@ function Get-AzMigrateJob {
                 }
             }
 
-            return  Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+            return  Az.Migrate.Internal\Get-AzMigrateWorkflow @PSBoundParameters
         }
         else {
             throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."

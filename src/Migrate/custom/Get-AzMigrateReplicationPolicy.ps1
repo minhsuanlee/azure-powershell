@@ -129,7 +129,7 @@ function Get-AzMigrateReplicationPolicy {
             $null = $PSBoundParameters.Remove('ResourceName')
             $null = $PSBoundParameters.Add('VaultName', $ResourceName)
             
-            return Get-AzMigratePolicy @PSBoundParameters
+            return Az.Migrate.Internal\Get-AzMigratePolicy @PSBoundParameters
         }
         else {
             throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."

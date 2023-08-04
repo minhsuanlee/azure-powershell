@@ -659,7 +659,7 @@ public static int hashForArtifact(String artifact)
             }
 
             # Get Migrate Project
-            $migrateProject = Get-AzMigrateProject `
+            $migrateProject = Az.Migrate\Get-AzMigrateProject `
                 -Name $ProjectName `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -ErrorVariable notPresent `
@@ -670,7 +670,7 @@ public static int hashForArtifact(String artifact)
 
             # Access Discovery Service
             $discoverySolutionName = "Servers-Discovery-ServerDiscovery"
-            $discoverySolution = Get-AzMigrateSolution `
+            $discoverySolution = Az.Migrate\Get-AzMigrateSolution `
                 -SubscriptionId $SubscriptionId `
                 -ResourceGroupName $ResourceGroupName `
                 -MigrateProjectName $ProjectName `
@@ -718,7 +718,7 @@ public static int hashForArtifact(String artifact)
             Write-Host "Running '$($instanceType)' instance."
 
             # Get Source and Target Fabrics
-            $allFabrics = Get-AzMigrateFabric -ResourceGroupName $resourceGroup.ResourceGroupName
+            $allFabrics = Az.Migrate.Internal\Get-AzMigrateFabric -ResourceGroupName $resourceGroup.ResourceGroupName
             foreach ($fabric in $allFabrics) {
                 if (($instanceType -eq $AzStackHCIInstanceTypes.HyperVToAzStackHCI) -and
                     ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.HyperVInstance)) {
@@ -749,7 +749,7 @@ public static int hashForArtifact(String artifact)
             Write-Host "*Selected Target Fabric: '$($targetFabric.Name)'."
 
             # Get Source and Target Dras from Fabrics
-            $sourceDras = Get-AzMigrateDra `
+            $sourceDras = Az.Migrate.Internal\Get-AzMigrateDra `
                 -FabricName $sourceFabric.Name `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -ErrorVariable notPresent `
@@ -760,7 +760,7 @@ public static int hashForArtifact(String artifact)
             $sourceDra = $sourceDras[0]
             Write-Host "*Selected Source Dra: '$($sourceDra.Name)'."
 
-            $targetDras = Get-AzMigrateDra `
+            $targetDras = Az.Migrate.Internal\Get-AzMigrateDra `
                 -FabricName $targetFabric.Name `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -ErrorVariable notPresent `
@@ -772,7 +772,7 @@ public static int hashForArtifact(String artifact)
             Write-Host "*Selected Target Dra: '$($targetDra.Name)'."
 
             # Get Data Replication Service
-            $solution = Get-AzMigrateSolution `
+            $solution = Az.Migrate\Get-AzMigrateSolution `
                 -SubscriptionId $SubscriptionId `
                 -ResourceGroupName $ResourceGroupName `
                 -MigrateProjectName $ProjectName `
@@ -782,7 +782,7 @@ public static int hashForArtifact(String artifact)
             if ($solution -and ($solution.Count -ge 1)) {
                 # Get Replication Vault
                 $replicationVaultName = $solution.DetailExtendedDetail["vaultId"].Split("/")[8]
-                $replicationVault = Get-AzMigrateVault -ResourceGroupName $resourceGroup.ResourceGroupName -Name $replicationVaultName
+                $replicationVault = Az.Migrate.Internal\Get-AzMigrateVault -ResourceGroupName $resourceGroup.ResourceGroupName -Name $replicationVaultName
                 if ($null -eq $replicationVault) {
                     throw "No Replication Vault found in Resource Group '$($resourceGroup.ResourceGroupName)'."
                 }
@@ -793,7 +793,7 @@ public static int hashForArtifact(String artifact)
 
             # Put Policy
             $policyName = $replicationVault.Name + $instanceType + "policy"
-            $policy = Get-AzMigratePolicy `
+            $policy = Az.Migrate.Internal\Get-AzMigratePolicy `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -Name $policyName `
                 -VaultName $replicationVault.Name `
@@ -827,7 +827,7 @@ public static int hashForArtifact(String artifact)
                 $policyCustomProperties.AppConsistentFrequencyInMinute = $params.AppConsistentFrequencyInMinute
                 $policyProperties.CustomProperty = $policyCustomProperties
             
-                $policyOperation = New-AzMigratePolicy `
+                $policyOperation = Az.Migrate.Internal\New-AzMigratePolicy `
                     -Name $policyName `
                     -ResourceGroupName $resourceGroup.ResourceGroupName `
                     -VaultName $replicationVaultName `
@@ -837,7 +837,7 @@ public static int hashForArtifact(String artifact)
 
                 # Check Policy creation status every 5s
                 while ($true) {
-                    $operationStatus = Get-AzMigratePolicyOperationStatus `
+                    $operationStatus = Az.Migrate.Internal\Get-AzMigratePolicyOperationStatus `
                         -PolicyName $policyName `
                         -ResourceGroupName $resourceGroup.ResourceGroupName `
                         -VaultName $replicationVault.Name `
@@ -866,7 +866,7 @@ public static int hashForArtifact(String artifact)
                 Write-Host "Existing Policy found."
             }
         
-            $policy = Get-AzMigratePolicy `
+            $policy = Az.Migrate.Internal\Get-AzMigratePolicy `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -Name $policyName `
                 -VaultName $replicationVault.Name `
@@ -1024,7 +1024,7 @@ public static int hashForArtifact(String artifact)
         
             # Put Replication Extension
             $replicationExtensionName = ($sourceFabric.Id -split '/')[-1] + "-" + ($targetFabric.Id -split '/')[-1] + "-MigReplicationExtn"
-            $replicationExtension = Get-AzMigrateReplicationExtension `
+            $replicationExtension = Az.Migrate.Internal\Get-AzMigrateReplicationExtension `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -Name $replicationExtensionName `
                 -VaultName $replicationVaultName `
@@ -1065,7 +1065,7 @@ public static int hashForArtifact(String artifact)
                 $replicationExtensionCustomProperties.StorageAccountSasSecretName = $params.StorageAccountSasSecretName
                 $replicationExtensionProperties.CustomProperty = $replicationExtensionCustomProperties
             
-                $replicationExtensionOperation = New-AzMigrateReplicationExtension `
+                $replicationExtensionOperation = Az.Migrate.Internal\New-AzMigrateReplicationExtension `
                     -Name $replicationExtensionName `
                     -ResourceGroupName $resourceGroup.ResourceGroupName `
                     -VaultName $replicationVaultName `
@@ -1075,7 +1075,7 @@ public static int hashForArtifact(String artifact)
 
                 # Check Replication Extension creation status every 30s
                 while ($true) {
-                    $operationStatus = Get-AzMigrateReplicationExtensionOperationStatus `
+                    $operationStatus = Az.Migrate.Internal\Get-AzMigrateReplicationExtensionOperationStatus `
                         -ReplicationExtensionName $replicationExtensionName `
                         -ResourceGroupName $resourceGroup.ResourceGroupName `
                         -VaultName $replicationVault.Name `
@@ -1105,7 +1105,7 @@ public static int hashForArtifact(String artifact)
             }
 
             # Get Replication Extension
-            $replicationExtension = Get-AzMigrateReplicationExtension `
+            $replicationExtension = Az.Migrate.Internal\Get-AzMigrateReplicationExtension `
                 -ResourceGroupName $resourceGroup.ResourceGroupName `
                 -Name $replicationExtensionName `
                 -VaultName $replicationVaultName `

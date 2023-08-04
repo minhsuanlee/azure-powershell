@@ -22,14 +22,22 @@ The Get-AzMigrateServerReplication cmdlet retrieves the object for the replicati
 https://learn.microsoft.com/powershell/module/az.migrate/get-azmigrateserverreplication
 #>
 function Get-AzMigrateServerReplication {
-    [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem])]
+    [OutputType([System.Object])]
     [CmdletBinding(DefaultParameterSetName = 'ListByName', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'GetBySRSID', Mandatory)]
+        [Parameter(ParameterSetName = 'GetByItemID', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
         # Specifies the replicating server.
         ${TargetObjectID},
+
+        [Parameter()]
+        [ValidateSet("agentlessVMware", "AzStackHCI")]
+        [ArgumentCompleter( { "agentlessVMware", "AzStackHCI" })]
+        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
+        [System.String]
+        # Specifies the server migration scenario.
+        ${Scenario},
 
         [Parameter(ParameterSetName = 'ListByName', Mandatory)]
         [Parameter(ParameterSetName = 'GetByMachineName', Mandatory)]
@@ -53,7 +61,7 @@ function Get-AzMigrateServerReplication {
 
         [Parameter(ParameterSetName = 'GetByInputObject', Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api202301.IMigrationItem]
+        [System.Object]
         # Specifies the machine object of the replicating server.
         ${InputObject},
 
@@ -145,6 +153,8 @@ function Get-AzMigrateServerReplication {
     )
     
     process {
+        Import-Module $PSScriptRoot\AzStackHCICommonSettings.ps1
+
         $parameterSet = $PSCmdlet.ParameterSetName
         $null = $PSBoundParameters.Remove('TargetObjectID')
         $null = $PSBoundParameters.Remove('ResourceGroupName')
@@ -158,122 +168,220 @@ function Get-AzMigrateServerReplication {
         $null = $PSBoundParameters.Remove('Filter')
         $null = $PSBoundParameters.Remove('SkipToken')
         $null = $PSBoundParameters.Remove('MachineName')
+
+        if ($PSBoundParameters.ContainsKey('Scenario')) {
+            $null = $PSBoundParameters.Remove('Scenario')
+        }
+        elseif ($PSDefaultParameterValues.ContainsKey('InitializeReplicationInfrastructure:Scenario')) {
+            $Scenario = $PSDefaultParameterValues['InitializeReplicationInfrastructure:Scenario']
+        }
            
-        if ($parameterSet -eq "GetBySDSID") {
-            $MachineIdArray = $DiscoveredMachineId.Split("/")
-            $SiteType = $MachineIdArray[7]
-            $SiteName = $MachineIdArray[8]
-            $ResourceGroupName = $MachineIdArray[4]
-            $MachineName = $MachineIdArray[10]
+        if (([string]::IsNullOrEmpty($Scenario)) -or ($Scenario -eq $AzMigrateSupportedScenarios.agentlessVMware)) {
+            if ($parameterSet -eq "GetBySDSID") {
+                $MachineIdArray = $DiscoveredMachineId.Split("/")
+                $SiteType = $MachineIdArray[7]
+                $SiteName = $MachineIdArray[8]
+                $ResourceGroupName = $MachineIdArray[4]
+                $MachineName = $MachineIdArray[10]
 
-            if ($SiteType -ne "VMwareSites") {
-                throw "Provider not supported."
+                if ($SiteType -ne "VMwareSites") {
+                    throw "Provider not supported."
+                }
+
+                $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
+                $null = $PSBoundParameters.Add('SiteName', $SiteName)
+                $siteObject = Az.Migrate\Get-AzMigrateSite @PSBoundParameters
+                $ProjectName = $siteObject.DiscoverySolutionId.Split("/")[8]
+                    
+                $null = $PSBoundParameters.Remove('SiteName')
+
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                    
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+                    
+                    $null = $PSBoundParameters.Remove("Name")
+                    $null = $PSBoundParameters.Remove("MigrateProjectName")
+                    $null = $PSBoundParameters.Add('ResourceName', $VaultName)
+                    $allFabrics = Az.Migrate\Get-AzMigrateReplicationFabric @PSBoundParameters
+                    $FabricName = ""
+                    if ($allFabrics -and ($allFabrics.length -gt 0)) {
+                        foreach ($fabric in $allFabrics) {
+                            if (($fabric.Property.CustomDetail.InstanceType -ceq "VMwareV2") -and ($fabric.Property.CustomDetail.VmwareSiteId.Split("/")[8] -ceq $SiteName)) {
+                                $FabricName = $fabric.Name
+                                break
+                            }
+                        }
+                    }
+                    if ($FabricName -eq "") {
+                        throw "Fabric not found for given resource group"
+                    }
+        
+                    $null = $PSBoundParameters.Add('FabricName', $FabricName)
+                    $peContainers = Az.Migrate\Get-AzMigrateReplicationProtectionContainer @PSBoundParameters
+                    $ProtectionContainerName = ""
+                    if ($peContainers -and ($peContainers.length -gt 0)) {
+                        $ProtectionContainerName = $peContainers[0].Name
+                    }
+        
+                    if ($ProtectionContainerName -eq "") {
+                        throw "Container not found for given resource group"
+                    }
+        
+                    $null = $PSBoundParameters.Add("MigrationItemName", $MachineName)
+                    $null = $PSBoundParameters.Add("ProtectionContainerName", $ProtectionContainerName)
+        
+                    return Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
+                }
+                else {
+                    throw "Solution not found."
+                }
             }
-
-            $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
-            $null = $PSBoundParameters.Add('SiteName', $SiteName)
-            $siteObject = Az.Migrate\Get-AzMigrateSite @PSBoundParameters
-            $ProjectName = $siteObject.DiscoverySolutionId.Split("/")[8]
                 
-            $null = $PSBoundParameters.Remove('SiteName')
+            if (($parameterSet -match 'List') -or ($parameterSet -eq "GetByMachineName")) {
+                if ($parameterSet -eq 'ListById') {
+                    $ProjectName = $ProjectID.Split("/")[8]
+                    $ResourceGroupName = $ResourceGroupID.Split("/")[4]
+                }
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                    
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+                }
+                else {
+                    throw "Solution not found."
+                }
 
-            $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
-            $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
-                
-            $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
-            if ($solution -and ($solution.Count -ge 1)) {
-                $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
-                   
                 $null = $PSBoundParameters.Remove("Name")
                 $null = $PSBoundParameters.Remove("MigrateProjectName")
                 $null = $PSBoundParameters.Add('ResourceName', $VaultName)
-                $allFabrics = Az.Migrate\Get-AzMigrateReplicationFabric @PSBoundParameters
-                $FabricName = ""
-                if ($allFabrics -and ($allFabrics.length -gt 0)) {
-                    foreach ($fabric in $allFabrics) {
-                        if (($fabric.Property.CustomDetail.InstanceType -ceq "VMwareV2") -and ($fabric.Property.CustomDetail.VmwareSiteId.Split("/")[8] -ceq $SiteName)) {
-                            $FabricName = $fabric.Name
-                            break
-                        }
-                    }
+
+                if ($HasFilter) {
+                    $null = $PSBoundParameters.Add("Filter", $Filter)
                 }
-                if ($FabricName -eq "") {
-                    throw "Fabric not found for given resource group"
+                if ($HasSkipToken) {
+                    $null = $PSBoundParameters.Add("SkipToken", $SkipToken)
                 }
-    
-                $null = $PSBoundParameters.Add('FabricName', $FabricName)
-                $peContainers = Az.Migrate\Get-AzMigrateReplicationProtectionContainer @PSBoundParameters
-                $ProtectionContainerName = ""
-                if ($peContainers -and ($peContainers.length -gt 0)) {
-                    $ProtectionContainerName = $peContainers[0].Name
+                    
+                $replicatingItems = Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
+                if ($parameterSet -eq "GetByMachineName") {
+                    $replicatingItems = $replicatingItems | Where-Object { $_.MachineName -eq $MachineName }
                 }
-    
-                if ($ProtectionContainerName -eq "") {
-                    throw "Container not found for given resource group"
+                return $replicatingItems
+            }
+
+            if (($parameterSet -eq "GetByInputObject") -or ($parameterSet -eq "GetByItemID")) {
+                if ($parameterSet -eq 'GetByInputObject') {
+                    $TargetObjectID = $InputObject.Id
                 }
-    
+                $MachineIdArray = $TargetObjectID.Split("/")
+                $ResourceGroupName = $MachineIdArray[4]
+                $VaultName = $MachineIdArray[8]
+                $FabricName = $MachineIdArray[10]
+                $ProtectionContainerName = $MachineIdArray[12]
+                $MachineName = $MachineIdArray[14]
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("ResourceName", $VaultName)
+                $null = $PSBoundParameters.Add("FabricName", $FabricName)
                 $null = $PSBoundParameters.Add("MigrationItemName", $MachineName)
                 $null = $PSBoundParameters.Add("ProtectionContainerName", $ProtectionContainerName)
-    
+        
                 return Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
             }
-            else {
-                throw "Solution not found."
-            }
         }
-            
-        if (($parameterSet -match 'List') -or ($parameterSet -eq "GetByMachineName")) {
-            if ($parameterSet -eq 'ListById') {
-                $ProjectName = $ProjectID.Split("/")[8]
-                $ResourceGroupName = $ResourceGroupID.Split("/")[4]
-            }
-            $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
-            $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration")
-            $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+        elseif ($Scenario -eq $AzMigrateSupportedScenarios.AzStackHCI) {
+            if ($parameterSet -eq "GetBySDSID") {
+                $MachineIdArray = $DiscoveredMachineId.Split("/")
+                $SiteType = $MachineIdArray[7]
+                $SiteName = $MachineIdArray[8]
+                $ResourceGroupName = $MachineIdArray[4]
+                $MachineName = $MachineIdArray[10]
+
+                $null = $PSBoundParameters.Add('ResourceGroupName', $ResourceGroupName)
+                $null = $PSBoundParameters.Add('SiteName', $SiteName)
+
+                if ($SiteType -eq $SiteTypes.VMwareSites) {
+                    $siteObject = Az.Migrate\Get-AzMigrateSite @PSBoundParameters
+                }
+                else {
+                    $siteObject = Az.Migrate\Get-AzMigrateHyperVSite @PSBoundParameters
+                }
                 
-            $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
-            if ($solution -and ($solution.Count -ge 1)) {
-                $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
-            }
-            else {
-                throw "Solution not found."
-            }
+                $ProjectName = $siteObject.DiscoverySolutionId.Split("/")[8]
+                    
+                $null = $PSBoundParameters.Remove('SiteName')
 
-            $null = $PSBoundParameters.Remove("Name")
-            $null = $PSBoundParameters.Remove("MigrateProjectName")
-            $null = $PSBoundParameters.Add('ResourceName', $VaultName)
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration_DataReplication")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                        
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+                }
+                else {
+                    throw "Solution not found."
+                }
 
-            if ($HasFilter) {
-                $null = $PSBoundParameters.Add("Filter", $Filter)
-            }
-            if ($HasSkipToken) {
-                $null = $PSBoundParameters.Add("SkipToken", $SkipToken)
-            }
-                
-            $replicatingItems = Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
-            if ($parameterSet -eq "GetByMachineName") {
-                $replicatingItems = $replicatingItems | Where-Object { $_.MachineName -eq $MachineName }
-            }
-            return $replicatingItems
-        }
-
-        if (($parameterSet -eq "GetByInputObject") -or ($parameterSet -eq "GetBySRSID")) {
-            if ($parameterSet -eq 'GetByInputObject') {
-                $TargetObjectID = $InputObject.Id
-            }
-            $MachineIdArray = $TargetObjectID.Split("/")
-            $ResourceGroupName = $MachineIdArray[4]
-            $VaultName = $MachineIdArray[8]
-            $FabricName = $MachineIdArray[10]
-            $ProtectionContainerName = $MachineIdArray[12]
-            $MachineName = $MachineIdArray[14]
-            $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
-            $null = $PSBoundParameters.Add("ResourceName", $VaultName)
-            $null = $PSBoundParameters.Add("FabricName", $FabricName)
-            $null = $PSBoundParameters.Add("MigrationItemName", $MachineName)
-            $null = $PSBoundParameters.Add("ProtectionContainerName", $ProtectionContainerName)
+                $null = $PSBoundParameters.Remove("Name")
+                $null = $PSBoundParameters.Remove("MigrateProjectName")
+        
+                $null = $PSBoundParameters.Add("VaultName", $VaultName)
+                $null = $PSBoundParameters.Add("Name", $MachineName)
     
-            return Az.Migrate.internal\Get-AzMigrateReplicationMigrationItem @PSBoundParameters
+                return Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
+                
+            }
+                
+            if (($parameterSet -match 'List') -or ($parameterSet -eq "GetByMachineName")) {
+                if ($parameterSet -eq 'ListById') {
+                    $ProjectName = $ProjectID.Split("/")[8]
+                    $ResourceGroupName = $ResourceGroupID.Split("/")[4]
+                }
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("Name", "Servers-Migration-ServerMigration_DataReplication")
+                $null = $PSBoundParameters.Add("MigrateProjectName", $ProjectName)
+                    
+                $solution = Az.Migrate\Get-AzMigrateSolution @PSBoundParameters
+                if ($solution -and ($solution.Count -ge 1)) {
+                    $VaultName = $solution.DetailExtendedDetail.AdditionalProperties.vaultId.Split("/")[8]
+                }
+                else {
+                    throw "Solution not found."
+                }
+
+                $null = $PSBoundParameters.Remove("Name")
+                $null = $PSBoundParameters.Remove("MigrateProjectName")
+                $null = $PSBoundParameters.Add("VaultName", $VaultName)
+                    
+                $replicatingItems = return Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
+                if ($parameterSet -eq "GetByMachineName") {
+                    $replicatingItems = $replicatingItems | Where-Object { $_.MachineName -eq $MachineName }
+                }
+                return $replicatingItems
+            }
+
+            if (($parameterSet -eq "GetByInputObject") -or ($parameterSet -eq "GetByItemID")) {
+                if ($parameterSet -eq 'GetByInputObject') {
+                    $TargetObjectID = $InputObject.Id
+                }
+                $MachineIdArray = $TargetObjectID.Split("/")
+                $ResourceGroupName = $MachineIdArray[4]
+                $VaultName = $MachineIdArray[8]
+                $MachineName = $MachineIdArray[10]
+                $null = $PSBoundParameters.Add("ResourceGroupName", $ResourceGroupName)
+                $null = $PSBoundParameters.Add("VaultName", $VaultName)
+                $null = $PSBoundParameters.Add("Name", $MachineName)
+        
+                return Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
+            }
+        }
+        else {
+            throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
         }
     }
 }

@@ -195,7 +195,7 @@ function Remove-AzMigrateServerReplication {
                 $null = $PSBoundParameters.Add('ForceDelete', [System.Convert]::ToBoolean($ForceRemove))
             }
 
-            $operation = Remove-AzMigrateProtectedItem @PSBoundParameters
+            $operation = Az.Migrate.Internal\Remove-AzMigrateProtectedItem @PSBoundParameters
             $jobName = $operation.Target.Split("/")[14].Split("?")[0]
             
             $null = $PSBoundParameters.Remove('ProtectedItemName')
@@ -203,7 +203,7 @@ function Remove-AzMigrateServerReplication {
             $null = $PSBoundParameters.Remove('ForceDelete')
             $null = $PSBoundParameters.Add('Name', $jobName)
 
-            return Az.Migrate\Get-AzMigrateWorkflow @PSBoundParameters
+            return Az.Migrate.Internal\Get-AzMigrateWorkflow @PSBoundParameters
         }
         else {
             throw "Unknown Scenario '$($Scenario)' is set. Please set -Scenario to 'agentlessVMware' or 'AzStackHCI'."
