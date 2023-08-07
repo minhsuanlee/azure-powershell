@@ -896,7 +896,7 @@ public static int hashForArtifact(String artifact)
                 
                 # Get the site to get project name.
                 $null = $PSBoundParameters.Remove('MachineName')
-                $siteObject = Az.Migrate\Get-AzMigrateHyperVSite @PSBoundParameters
+                $siteObject = Az.Migrate.Internal\Get-AzMigrateHyperVSite @PSBoundParameters
             }
             else {
                 $InputObject = Az.Migrate.Internal\Get-AzMigrateMachine @PSBoundParameters
@@ -1009,7 +1009,7 @@ public static int hashForArtifact(String artifact)
 
             # Get RunAsAccount
             if ($SiteType -eq $SiteTypes.HyperVSites) {
-                $runAsAccounts = Az.Migrate\Get-AzMigrateHyperVRunAsAccount `
+                $runAsAccounts = Az.Migrate.Internal\Get-AzMigrateHyperVRunAsAccount `
                     -ResourceGroupName $ResourceGroupName `
                     -SiteName $SiteName `
                     -SubscriptionId $SubscriptionId

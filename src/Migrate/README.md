@@ -421,6 +421,11 @@ directive:
     where:
       subject: ^Planned
     hide: true
+  - from: Microsoft.OffAzure/stable/2020-01-01/migrate.json
+    where:
+      verb: Get
+      subject: ^HyperV(Site|RunAsAccount)$
+    hide: true
   # Hide cmdlets not to be visible to user.
   - from: Microsoft.Migrate/preview/2018-09-01-preview/migrate.json
     where:
