@@ -75,18 +75,13 @@ function New-AzMigrateHCIDiskMapping {
     )
     
     process {
-        $validBooleanSpellings = @{ 
-            true  = "true";
-            false = "false"
-        }
-        
-        $dynamic = [System.Convert]::ToBoolean($validBooleanSpellings[$IsDynamic])
-        $osDisk = [System.Convert]::ToBoolean($validBooleanSpellings[$IsOSDisk])
+        $isDynamicDisk = [System.Convert]::ToBoolean($IsDynamic)
+        $osDisk = [System.Convert]::ToBoolean($IsOSDisk)
         $instanceType = $PSCmdlet.ParameterSetName
 
         $DiskObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.AzStackHCIDiskInput]::new(
             $DiskID, 
-            $dynamic, 
+            $isDynamicDisk, 
             $Size, 
             $Format, 
             $osDisk,

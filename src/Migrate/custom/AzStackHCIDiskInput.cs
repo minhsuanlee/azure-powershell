@@ -34,7 +34,7 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview
         /// Gets or sets a value indicating whether dynamic sizing is enabled on the virtual hard
         /// disk.
         /// </summary>
-        public bool IsDynamic { get; set; }
+        public bool? IsDynamic { get; set; }
         
         /// <summary>Gets or sets a value indicating whether disk is os disk.</summary>
         public bool IsOSDisk { get; set; }

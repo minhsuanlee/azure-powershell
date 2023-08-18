@@ -160,7 +160,7 @@ function Get-AzMigrateHCIServerReplication {
         $null = $PSBoundParameters.Remove('Filter')
         $null = $PSBoundParameters.Remove('SkipToken')
         $null = $PSBoundParameters.Remove('MachineName')
-
+     
         if ($parameterSet -eq "GetBySDSID") {
             $MachineIdArray = $DiscoveredMachineId.Split("/")
             $SiteType = $MachineIdArray[7]
@@ -224,9 +224,10 @@ function Get-AzMigrateHCIServerReplication {
             $null = $PSBoundParameters.Remove("MigrateProjectName")
             $null = $PSBoundParameters.Add("VaultName", $VaultName)
                 
-            $replicatingItems = return Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
+            $replicatingItems = Az.Migrate.Internal\Get-AzMigrateProtectedItem @PSBoundParameters
+
             if ($parameterSet -eq "GetByMachineName") {
-                $replicatingItems = $replicatingItems | Where-Object { $_.MachineName -eq $MachineName }
+                $replicatingItems = $replicatingItems | Where-Object { $_.Property.FabricObjectName -eq $MachineName }
             }
             return $replicatingItems
         }
