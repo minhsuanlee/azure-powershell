@@ -25,18 +25,6 @@ function New-AzMigrateHCIDiskMapping {
     [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.AzStackHCIDiskInput])]
     [CmdletBinding(DefaultParameterSetName = 'HyperV', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'VMware', Mandatory, Position = 0)]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Switch]
-        # Specifies the output disk is for VMware migration.
-        ${VMware},
-
-        [Parameter(ParameterSetName = 'HyperV', Mandatory, Position = 0)]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Switch]
-        # Specifies the output disk is for HyperV migration.
-        ${HyperV},
-
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
@@ -77,15 +65,13 @@ function New-AzMigrateHCIDiskMapping {
     process {
         $isDynamicDisk = [System.Convert]::ToBoolean($IsDynamic)
         $osDisk = [System.Convert]::ToBoolean($IsOSDisk)
-        $instanceType = $PSCmdlet.ParameterSetName
 
         $DiskObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.AzStackHCIDiskInput]::new(
             $DiskID, 
             $isDynamicDisk, 
             $Size, 
             $Format, 
-            $osDisk,
-            $instanceType
+            $osDisk
         )
 
         return $DiskObject 

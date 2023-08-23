@@ -25,18 +25,6 @@ function New-AzMigrateHCINicMapping {
     [OutputType([Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.AzStackHCINicInput])]
     [CmdletBinding(DefaultParameterSetName = 'HyperV', PositionalBinding = $false)]
     param(
-        [Parameter(ParameterSetName = 'VMware', Mandatory, Position = 0)]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Switch]
-        # Specifies the output disk is for VMware migration.
-        ${VMware},
-
-        [Parameter(ParameterSetName = 'HyperV', Mandatory, Position = 0)]
-        [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
-        [Switch]
-        # Specifies the output disk is for HyperV migration.
-        ${HyperV},
-
         [Parameter(Mandatory)]
         [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Category('Path')]
         [System.String]
@@ -51,13 +39,10 @@ function New-AzMigrateHCINicMapping {
     )
     
     process {
-        $instanceType = $PSCmdlet.ParameterSetName
-
         $NicObject = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.AzStackHCINicInput]::new(
             $NicID,
             $TargetNetworkId,
-            $TargetNetworkId,
-            $instanceType
+            $TargetNetworkId
         )
         
         return $NicObject

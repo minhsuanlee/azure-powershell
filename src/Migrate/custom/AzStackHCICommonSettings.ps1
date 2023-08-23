@@ -79,3 +79,24 @@ resources
 | extend  ContainerSizeMB = properties['status']['containerSizeMB']
 ) on CustomLocation
 | project-away ClusterId, CustomLocation"
+
+
+$VirtualSwitchQuery = "resources
+| where type == 'microsoft.extendedlocation/customlocations'
+| mv-expand ClusterId = properties['clusterExtensionIds']
+| extend ClusterId = toupper(tostring(ClusterId))
+| extend CustomLocation = toupper(tostring(id))
+| project ClusterId, CustomLocation
+| join (
+kubernetesconfigurationresources
+| where type == 'microsoft.kubernetesconfiguration/extensions'
+| where properties['ConfigurationSettings']['HCIClusterID'] =~ '{0}'
+| project ClusterId = id
+| extend ClusterId = toupper(tostring(ClusterId))
+) on ClusterId
+| join (
+resources
+| where type == 'microsoft.azurestackhci/virtualnetworks'
+| extend CustomLocation = toupper(tostring(extendedLocation['name']))
+) on CustomLocation
+| project-away ClusterId, CustomLocation, ClusterId1, CustomLocation1"

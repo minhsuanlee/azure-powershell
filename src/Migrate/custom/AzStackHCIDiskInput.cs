@@ -10,15 +10,13 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview
             bool isDynamic, 
             long diskSizeGB, 
             string diskFileFormat, 
-            bool isOsDisk,
-            string instanceType)
+            bool isOsDisk)
         {
             DiskId = diskId;
             IsDynamic = isDynamic;
             DiskSizeGb = diskSizeGB;
             DiskFileFormat = diskFileFormat;
             IsOSDisk = isOsDisk;
-            InstanceType = instanceType;
         }
 
         /// <summary>Gets or sets the type of the virtual hard disk, vhd or vhdx.</summary>
@@ -38,11 +36,5 @@ namespace Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview
         
         /// <summary>Gets or sets a value indicating whether disk is os disk.</summary>
         public bool IsOSDisk { get; set; }
-       
-        /// <summary>Gets or sets the target storage account ARM Id.</summary>
-        public string StorageContainerId { get; set; }
-
-        /// <summary> Gets or sets the instance type.</summary>
-        public string InstanceType { get; private set; }
     }
 }

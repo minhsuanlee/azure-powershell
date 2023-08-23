@@ -154,6 +154,7 @@ function New-AzMigrateHCIServerReplication {
         $HasTargetVMCPUCores = $PSBoundParameters.ContainsKey('TargetVMCPUCores')
         $HasIsDynamicMemoryEnabled = $PSBoundParameters.ContainsKey('IsDynamicMemoryEnabled')
         $HasTargetVMRam = $PSBoundParameters.ContainsKey('TargetVMRam')
+        $parameterSet = $PSCmdlet.ParameterSetName
 
         $null = $PSBoundParameters.Remove('TargetVMCPUCores')
         $null = $PSBoundParameters.Remove('IsDynamicMemoryEnabled')
@@ -223,11 +224,15 @@ function New-AzMigrateHCIServerReplication {
         $null = $PSBoundParameters.Remove("Name")
         $null = $PSBoundParameters.Remove("MigrateProjectName")
 
+        if ($null -eq $solution) {
+            throw "Migrate solution is not found."
+        }
+
         if ([string]::IsNullOrEmpty($vaultName)) {
             throw "Vault is not found."
         }
 
-        # Get Policy
+        # Validate Policy
         $policyName = $vaultName + $instanceType + "policy"
         $policyObj = Az.Migrate.Internal\Get-AzMigratePolicy `
             -ResourceGroupName $ResourceGroupName `
@@ -242,10 +247,14 @@ function New-AzMigrateHCIServerReplication {
         else {
             throw "The replication infrastructure is not initialized. Run the initialize-azmigratereplicationinfrastructure script again."
         }
-
+        
         # Get Source and Target Fabrics
         $allFabrics = Az.Migrate.Internal\Get-AzMigrateFabric -ResourceGroupName $ResourceGroupName
         foreach ($fabric in $allFabrics) {
+            if ($fabric.Property.CustomProperty.MigrationSolutionId -ne $solution.Id) {
+                continue;
+            }
+
             if ($fabric.Property.CustomProperty.InstanceType -ceq $FabricInstanceTypes.HyperVInstance) {
                 $sourceFabric = $fabric
             }
@@ -272,8 +281,7 @@ function New-AzMigrateHCIServerReplication {
         }
 
         $sourceDra = $sourceDras[0]
-
-        # TODO: check why IsResponsive is always null
+        # IsResponsive is always return null
         # if (!$sourceDra.IsResponsive) {
         #     throw "The Azure Migrate unified appliance '$($sourceDra.Name)' is in a disconnected state. Ensure that the appliance is running and has connectivity before proceeding."
         # }
@@ -288,7 +296,6 @@ function New-AzMigrateHCIServerReplication {
         }
 
         $targetDra = $targetDras[0]
-        # TODO: check why IsResponsive is always null
         # if (!$targetDra.IsResponsive) {
         #     throw "The Azure Migrate unified appliance '$($targetDra.Name)' is in a disconnected state. Ensure that the appliance is running and has connectivity before proceeding."
         # }
@@ -307,21 +314,33 @@ function New-AzMigrateHCIServerReplication {
             throw "The replication infrastructure is not initialized. Run the initialize-azmigratereplicationinfrastructure script again."
         }
 
-        # Get Storage Container
         $targetClusterId = $targetFabric.Property.CustomProperty.Cluster.ResourceName
+        # Get Storage Container
         $storageContainers = Search-AzGraph -Query ($StorageContainerQuery -f $targetClusterId)
         $storageContainer = $storageContainers | Where-Object {$_.Id -eq $TargetStoragePathId}
-        if($null -eq $storageContainer)
-        {
+        if($null -eq $storageContainer) {
             throw "Provided target storage path is not found."
         }
 
-        if("Succeeded" -ne $storageContainer.Properties.ProvisioningState)
-        {
+        if("Succeeded" -ne $storageContainer.Properties.ProvisioningState) {
             throw "Provided target storage path is not successfully provisioned. Provisioning State: $($storageContainer.Properties.ProvisioningState)"
         }
 
-        # Get RunAsAccount
+        # Get Virtual Switch
+        $virtualSwitchIds = if ($parameterSet -match 'DefaultUser') { $TargetVirtualSwitchId } else { $NicToInclude | Select-Object -Property TargetNetworkId }
+        $virtualSwitches = Search-AzGraph -Query ($VirtualSwitchQuery -f $targetClusterId)
+        foreach ($virtualSwitchId in $virtualSwitchIds) {
+            $virtualSwitch = $virtualSwitches | Where-Object {$_.Id -eq $virtualSwitchId}
+            if ($null -eq $virtualSwitch) {
+                throw "Provided virtual switch '$virtualSwitchId' is not found."
+            }
+
+            if ("Succeeded" -ne $virtualSwitch.Properties.ProvisioningState) {
+                throw "Provided virtual switch '$virtualSwitchId' is not successfully provisioned. Provisioning State: $($virtualSwitch.Properties.ProvisioningState)"
+            }
+        }
+            
+        # Get source appliance RunAsAccount
         if ($SiteType -eq $SiteTypes.HyperVSites) {
             $runAsAccounts = Az.Migrate\Get-AzMigrateHyperVRunAsAccount `
                 -ResourceGroupName $ResourceGroupName `
@@ -342,6 +361,9 @@ function New-AzMigrateHCIServerReplication {
         }
 
         # Validate TargetVMName
+        if ($TargetVMName.length -gt 64 -or $TargetVMName.length -eq 0) {
+            throw "The target virtual machine name must be between 1 and 64 characters long."
+        }
         Import-Module Az.Resources
         $vmId = $customProperties.TargetResourceGroupId + "/providers/Microsoft.Compute/virtualMachines/" + $TargetVMName
         $VMNamePresentInRg = Get-AzResource -ResourceId $vmId -ErrorVariable notPresent -ErrorAction SilentlyContinue
@@ -386,28 +408,22 @@ function New-AzMigrateHCIServerReplication {
         $customProperties.TargetHciClusterId                  = $targetClusterId
         $customProperties.TargetResourceGroupId               = $TargetResourceGroupId
         $customProperties.TargetVMName                        = $TargetVMName
-        # $customProperties.TargetNetworkId                     = $TargetVirtualSwitch
-        # $customProperties.TestNetworkId                       = $TargetVirtualSwitch
         $customProperties.HyperVGeneration                    = if ($SiteType -eq $SiteTypes.HyperVSites) { $InputObject.Generation } else { "1" }
         $customProperties.TargetCpuCore                       = if ($HasTargetVMCPUCores) { $TargetVMCPUCores } else { $InputObject.NumberOfProcessorCore }
         $customProperties.TargetMemoryInMegaByte              = if ($HasTargetVMRam) { $TargetVMRam } else { $InputObject.AllocatedMemoryInMB }
         $customProperties.IsDynamicRam                        = if ($HasIsDynamicMemoryEnabled) { $IsDynamicMemoryEnabled } else { $InputObject.IsDynamicMemoryEnabled }
-        
-        # Memory
-        if ($customProperties.TargetMemoryInMegaByte -lt 1024) {
-            $customProperties.TargetMemoryInMegaByte = 1024
-        }
 
         $memoryConfig = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.ProtectedItemDynamicMemoryConfig]::new()
         $memoryConfig.MinimumMemoryInMegaByte = [System.Math]::Min($customProperties.TargetMemoryInMegaByte, $RAMConfig.MinMemoryInMB)
         $memoryConfig.MaximumMemoryInMegaByte = [System.Math]::Max($customProperties.TargetMemoryInMegaByte, $RAMConfig.MaxMemoryInMB)
         $memoryConfig.TargetMemoryBufferPercentage = $RAMConfig.TargetMemoryBufferPercentage
+
         $customProperties.DynamicMemoryConfig = $memoryConfig
         
         # Disks and Nics
         [PSCustomObject[]]$disks = @()
         [PSCustomObject[]]$nics = @()
-        $parameterSet = $PSCmdlet.ParameterSetName
+        
         if ($parameterSet -match 'DefaultUser') {
             if ($SiteType -eq $SiteTypes.HyperVSites) {
                 $osDisk = $InputObject.Disk | Where-Object { $_.InstanceId -eq $OSDiskID }
@@ -446,6 +462,14 @@ function New-AzMigrateHCIServerReplication {
             }
         }
         else {
+            if ($null -eq $DiskToInclude -or $DiskToInclude.length -lt 1) {
+                throw "Invalid DiskToInclude. Atleast one disk is required."
+            }
+
+            if ($null -eq $NicToInclude -or $NicToInclude.length -lt 1) {
+                throw "Invalid NicToInclude. Atleast one NIC is required."
+            }
+
             # Validate OSDisk is set.
             $osDisk = $DiskToInclude | Where-Object { $_.IsOSDisk -eq $True }
             if (($null -eq $osDisk) -or ($osDisk.length -ne 1)) {
@@ -472,7 +496,8 @@ function New-AzMigrateHCIServerReplication {
                 $uniqueDisks += $disk.DiskId
 
                 $htDisk = @{}
-                $disks += [PSCustomeObject]($disk.PSObject.Properties | ForEach-Object { $htDisk[$_.Name] = $_.Value })
+                $disk.PSObject.Properties | ForEach-Object { $htDisk[$_.Name] = $_.Value }
+                $disks += [PSCustomObject]$htDisk
             }
 
             # Validate nics
@@ -490,7 +515,8 @@ function New-AzMigrateHCIServerReplication {
                 $uniqueNics += $nic.NicId
                 
                 $htNic = @{}
-                $nics += [PSCustomeObject]($nic.PSObject.Properties | ForEach-Object { $htNic[$_.Name] = $_.Value })
+                $nic.PSObject.Properties | ForEach-Object { $htNic[$_.Name] = $_.Value }
+                $nics += [PSCustomObject]$htNic
             }
         }
 
@@ -503,9 +529,6 @@ function New-AzMigrateHCIServerReplication {
             $customProperties.NicsToInclude = [Microsoft.Azure.PowerShell.Cmdlets.Migrate.Models.Api20210216Preview.VMwareToAzStackHCINicInput[]]$nics
         }
         
-        # TODO: validate memory is multiple of 2(?)
-        # TODO: for power users validate input disk and nic list are the expected type, validate length
-
         $protectedItemProperties.CustomProperty = $customProperties  
 
         $output = Az.Migrate.Internal\New-AzMigrateProtectedItem `
